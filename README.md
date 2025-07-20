@@ -82,27 +82,26 @@ type GreetingNode struct {
     name string
 }
 
-func (g *GreetingNode) Prep(state core.State) []interface{} {
+func (g *GreetingNode) Prep(state map[string]any) []string {
     name := "World"
     if userName, exists := state["user_name"]; exists {
         if nameStr, ok := userName.(string); ok {
             name = nameStr
         }
     }
-    return []interface{}{fmt.Sprintf("Generate a greeting for %s", name)}
+    return []string{fmt.Sprintf("Generate a greeting for %s", name)}
 }
 
-func (g *GreetingNode) Exec(prepResult interface{}) (interface{}, error) {
+func (g *GreetingNode) Exec(prepResult string) (string, error) {
     // In a real implementation, this would call an LLM
-    prompt := fmt.Sprintf("%v", prepResult)
-    return fmt.Sprintf("Hello, %s! Welcome to PocketFlow!", prompt), nil
+    return fmt.Sprintf("Hello, %s! Welcome to PocketFlow!", prepResult), nil
 }
 
-func (g *GreetingNode) ExecFallback(err error) interface{} {
+func (g *GreetingNode) ExecFallback(err error) string {
     return "Hello! Welcome to PocketFlow!"
 }
 
-func (g *GreetingNode) Post(state core.State, prepResults []interface{}, execResults ...interface{}) core.Action {
+func (g *GreetingNode) Post(state map[string]any, prepResults []string, execResults ...string) core.Action {
     if len(execResults) > 0 {
         state["greeting"] = execResults[0]
         return core.ActionSuccess
@@ -112,14 +111,14 @@ func (g *GreetingNode) Post(state core.State, prepResults []interface{}, execRes
 
 func main() {
     // Create flow with initial state
-    state := core.State{"user_name": "Alice"}
+    state := map[string]any{"user_name": "Alice"}
     
-    // Create and configure node
+    // Create and configure node with generic types
     greetingNode := &GreetingNode{name: "greeter"}
-    node := core.CreateNode(greetingNode, 3, 1) // 3 retries, 1 worker
+    node := core.NewNode[map[string]any, string, string](greetingNode, 3, 1) // 3 retries, 1 worker
     
     // Create flow and execute
-    flow := core.CreateFlow(node)
+    flow := core.NewFlow[map[string]any](node)
     action := flow.Run(state)
     
     // Access results from state
@@ -142,18 +141,18 @@ func main() {
 
 ```go
 // Workflow - Common interface for execution and connection management
-type Workflow interface {
+type Workflow[State any] interface {
     Run(state State) Action
-    AddSuccessor(action Action, successor Workflow)
-    GetSuccessors() map[Action][]Workflow
+    AddSuccessor(successor Workflow[State], action ...Action)
+    GetSuccessor(action Action) Workflow[State]
 }
 
 // BaseNode - Core interface for implementing business logic
-type BaseNode interface {
-    Prep(state State) []interface{}
-    Exec(prepResult interface{}) (interface{}, error)
-    ExecFallback(err error) interface{}
-    Post(state State, prepResults []interface{}, execResults ...interface{}) Action
+type BaseNode[State any, PrepResult any, ExecResults any] interface {
+    Prep(state State) []PrepResult
+    Exec(prepResult PrepResult) (ExecResults, error)
+    ExecFallback(err error) ExecResults
+    Post(state State, prepResults []PrepResult, execResults ...ExecResults) Action
 }
 ```
 
@@ -186,17 +185,17 @@ Flows use actions to control transitions between nodes:
 ### Chaining Nodes
 
 ```go
-node1 := core.CreateNode(baseNode1, 3, 1)
-node2 := core.CreateNode(baseNode2, 3, 1)
-node3 := core.CreateNode(baseNode3, 3, 1)
+node1 := core.NewNode[map[string]any, string, string](baseNode1, 3, 1)
+node2 := core.NewNode[map[string]any, string, string](baseNode2, 3, 1)
+node3 := core.NewNode[map[string]any, string, string](baseNode3, 3, 1)
 
 // Chain nodes based on actions
-node1.AddSuccessor(core.ActionSuccess, node2)
-node1.AddSuccessor(core.ActionFailure, node3)
-node2.AddSuccessor(core.ActionSuccess, node3)
+node1.AddSuccessor(node2, core.ActionSuccess)
+node1.AddSuccessor(node3, core.ActionFailure)
+node2.AddSuccessor(node3, core.ActionSuccess)
 
 // Create flow with start node
-flow := core.CreateFlow(node1)
+flow := core.NewFlow[map[string]any](node1)
 ```
 
 ## State Management
@@ -205,9 +204,9 @@ State is shared across all nodes in a flow:
 
 ```go
 // Initialize state
-state := core.State{
+state := map[string]any{
     "input": "user data",
-    "config": map[string]interface{}{
+    "config": map[string]any{
         "temperature": 0.7,
     },
 }
@@ -282,7 +281,7 @@ go test ./...
 ### Node Configuration
 
 ```go
-node := core.CreateNode(baseNode, maxRetries, maxWorkers)
+node := core.NewNode[map[string]any, string, string](baseNode, maxRetries, maxWorkers)
 node.SetMaxRetries(5)
 node.SetMaxRoutines(3)
 ```
@@ -291,10 +290,10 @@ node.SetMaxRoutines(3)
 
 ```go
 // Create flow with start node
-flow := core.CreateFlow(startNode)
+flow := core.NewFlow[map[string]any](startNode)
 
 // Execute flow with initial state
-state := core.State{"key": "value"}
+state := map[string]any{"key": "value"}
 action := flow.Run(state)
 ```
 
