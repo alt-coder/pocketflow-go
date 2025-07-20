@@ -219,22 +219,6 @@ type BaseNode[State any, PrepResult any, ExecResults any] interface {
 }
 ```
 
-## Specialized Nodes
-
-### RetryNode
-Handles structured output validation with automatic retries:
-
-```go
-config := retry.RetryNodeConfig{
-    Name:         "DataExtractor",
-    Prompt:       "Extract structured data as JSON",
-    OutputSchema: MyStruct{},
-    MaxRetries:   3,
-    LLMProvider:  provider,
-}
-retryNode := retry.NewRetryNode(config)
-```
-
 ## State Management
 
 State is shared across all nodes in a flow:
