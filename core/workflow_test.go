@@ -22,12 +22,12 @@ func NewMockWorkflow[T State](name string, runAction Action) *MockWorkflow[T] {
 	}
 }
 
-func (m *MockWorkflow[State]) Run(state State) Action {
+func (m *MockWorkflow[State]) Run(state *State) Action {
 	m.runCalled = true
 	// Mark that this workflow was executed in the state
 
 	if state != nil {
-		state[m.name+"_executed"] = true
+		(*state)[m.name+"_executed"] = true
 	}
 	return m.runAction
 }
@@ -36,7 +36,7 @@ func (m *MockWorkflow[State]) GetSuccessor(action Action) Workflow[State] {
 	return m.successors[action]
 }
 
-func (m *MockWorkflow[State]) AddSuccessor(successor Workflow[State], action ...Action) {
+func (m *MockWorkflow[State]) AddSuccessor(successor Workflow[State], action ...Action) Workflow[State] {
 	if m.successors == nil {
 		m.successors = make(map[Action]Workflow[State])
 	}
@@ -44,6 +44,7 @@ func (m *MockWorkflow[State]) AddSuccessor(successor Workflow[State], action ...
 		action = []Action{m.runAction}
 	}
 	m.successors[action[0]] = successor
+	return successor
 }
 
 // TestWorkflowInterface_GetSuccessor tests that GetSuccessor method returns correct workflow for actions
@@ -383,7 +384,7 @@ func TestWorkflowInterface_Run(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			workflow := tt.setupWorkflow()
-			result := workflow.Run(tt.inputState)
+			result := workflow.Run(&tt.inputState)
 
 			if result != tt.expectedAction {
 				t.Errorf("Run() = %v, expected %v", result, tt.expectedAction)
@@ -526,7 +527,7 @@ func TestWorkflowInterface_ActionBasedRouting(t *testing.T) {
 			workflow := tt.setupWorkflow()
 			state := State{}
 
-			result := workflow.Run(state)
+			result := workflow.Run(&state)
 
 			// Verify final action
 			if result != tt.finalAction {
@@ -563,7 +564,7 @@ func TestWorkflowInterface_ActionBasedRouting_EdgeCases(t *testing.T) {
 		workflow := NewFlow(node1)
 		state := State{"mismatch_test": true}
 
-		result := workflow.Run(state)
+		result := workflow.Run(&state)
 
 		// Should terminate with ActionFailure since no successor exists for that action
 		if result != ActionFailure {
@@ -670,7 +671,7 @@ func TestWorkflowInterface_StateManagement(t *testing.T) {
 		"counter":       0,
 	}
 
-	result := flow.Run(initialState)
+	result := flow.Run(&initialState)
 
 	// Verify final action
 	if result != ActionSuccess {

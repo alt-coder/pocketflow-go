@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type State  map[string]interface{}
+type State map[string]interface{}
 
 // TestDataProcessor simulates a data processing node
 type TestDataProcessor struct {
@@ -21,8 +21,8 @@ type TestDataProcessor struct {
 	failureAction Action
 }
 
-func (t *TestDataProcessor) Prep(state State) []interface{} {
-	if data, exists := state["input_data"]; exists {
+func (t *TestDataProcessor) Prep(state *State) []interface{} {
+	if data, exists := (*state)["input_data"]; exists {
 		if slice, ok := data.([]interface{}); ok {
 			return slice
 		}
@@ -53,8 +53,9 @@ func (t *TestDataProcessor) Exec(prepResult interface{}) (interface{}, error) {
 	}
 }
 
-func (t *TestDataProcessor) Post(state State, prepResults []interface{}, execResults ...interface{}) Action {
+func (t *TestDataProcessor) Post(stat *State, prepResults []interface{}, execResults ...interface{}) Action {
 	// Update state with results
+	state := *stat
 	state[fmt.Sprintf("%s_results", t.name)] = execResults
 	state[fmt.Sprintf("%s_count", t.name)] = len(execResults)
 
@@ -80,8 +81,9 @@ type TestValidator struct {
 	failureAction  Action
 }
 
-func (t *TestValidator) Prep(state State) []interface{} {
+func (t *TestValidator) Prep(stat *State) []interface{} {
 	// Get results from previous processors
+	state := *stat
 	var allResults []interface{}
 	for key, value := range state {
 		if key != "input_data" && key != "validation_results" {
@@ -107,7 +109,8 @@ func (t *TestValidator) Exec(prepResult interface{}) (interface{}, error) {
 	}, nil
 }
 
-func (t *TestValidator) Post(state State, prepResults []interface{}, execResults ...interface{}) Action {
+func (t *TestValidator) Post(stat *State, prepResults []interface{}, execResults ...interface{}) Action {
+	state := *stat
 	state["validation_results"] = execResults
 
 	// Check if all validations passed
@@ -139,7 +142,7 @@ type TestAggregator struct {
 	successAction Action
 }
 
-func (t *TestAggregator) Prep(state State) []interface{} {
+func (t *TestAggregator) Prep(state *State) []interface{} {
 	return []interface{}{"aggregate_all_data"}
 }
 
@@ -148,12 +151,12 @@ func (t *TestAggregator) Exec(prepResult interface{}) (interface{}, error) {
 	return "aggregation_complete", nil
 }
 
-func (t *TestAggregator) Post(state State, prepResults []interface{}, execResults ...interface{}) Action {
+func (t *TestAggregator) Post(state *State, prepResults []interface{}, execResults ...interface{}) Action {
 	// Aggregate all processing results
 	aggregatedData := make(map[string]interface{})
 	totalCount := 0
 
-	for key, value := range state {
+	for key, value := range *state {
 		if key != "input_data" {
 			aggregatedData[key] = value
 			if key == "processor1_count" || key == "processor2_count" {
@@ -165,7 +168,7 @@ func (t *TestAggregator) Post(state State, prepResults []interface{}, execResult
 	}
 
 	aggregatedData["total_processed_count"] = totalCount
-	state["final_aggregation"] = aggregatedData
+	(*state)["final_aggregation"] = aggregatedData
 
 	return t.successAction
 }
@@ -210,9 +213,9 @@ func TestComplexWorkflowExecution(t *testing.T) {
 	}, 1, 1)
 
 	// Connect nodes in sequence
-	processor1.AddSuccessor( processor2, ActionContinue)
-	processor2.AddSuccessor(validator, ActionContinue,)
-	validator.AddSuccessor(aggregator, ActionContinue,)
+	processor1.AddSuccessor(processor2, ActionContinue)
+	processor2.AddSuccessor(validator, ActionContinue)
+	validator.AddSuccessor(aggregator, ActionContinue)
 
 	// Create flow with complex data
 	flow := NewFlow(processor1)
@@ -222,7 +225,7 @@ func TestComplexWorkflowExecution(t *testing.T) {
 	}
 
 	// Execute the complex workflow
-	finalAction := flow.Run(initialState)
+	finalAction := flow.Run(&initialState)
 
 	// Verify final action
 	if finalAction != ActionSuccess {
@@ -275,7 +278,7 @@ func TestStatePropagationThroughWorkflowChains(t *testing.T) {
 	}, 1, 1)
 
 	// Connect nodes directly (not through subflow for this test)
-	stateModifier1.AddSuccessor( stateModifier2, ActionContinue)
+	stateModifier1.AddSuccessor(stateModifier2, ActionContinue)
 
 	// Create main flow
 	mainFlow := NewFlow(stateModifier1)
@@ -286,7 +289,7 @@ func TestStatePropagationThroughWorkflowChains(t *testing.T) {
 	}
 
 	// Execute workflow
-	finalAction := mainFlow.Run(initialState)
+	finalAction := mainFlow.Run(&initialState)
 
 	// Verify final action
 	if finalAction != ActionSuccess {
@@ -343,7 +346,7 @@ func TestErrorHandlingAndFallbackBehavior(t *testing.T) {
 	}, 1, 1)
 
 	// Connect nodes - processor continues to validator regardless of individual item failures
-	errorProneProcessor.AddSuccessor( fallbackValidator, ActionContinue,)
+	errorProneProcessor.AddSuccessor(fallbackValidator, ActionContinue)
 
 	// Create flow
 	flow := NewFlow(errorProneProcessor)
@@ -353,7 +356,7 @@ func TestErrorHandlingAndFallbackBehavior(t *testing.T) {
 		"input_data": []interface{}{"normal_data", "error_trigger", "more_data"},
 	}
 
-	finalAction := flow.Run(initialState)
+	finalAction := flow.Run(&initialState)
 
 	// Should succeed because fallback handles the error
 	if finalAction != ActionSuccess {
@@ -425,7 +428,7 @@ func TestConcurrentExecutionWithInterfaceTypes(t *testing.T) {
 
 	// Measure execution time
 	startTime := time.Now()
-	finalAction := flow.Run(initialState)
+	finalAction := flow.Run(&initialState)
 	executionTime := time.Since(startTime)
 
 	// Verify successful execution
@@ -490,7 +493,7 @@ func TestNestedFlowsWithComplexStateManagement(t *testing.T) {
 	}, 1, 2)
 
 	// Connect inner processors
-	innerProcessor1.AddSuccessor( innerProcessor2, ActionContinue,)
+	innerProcessor1.AddSuccessor(innerProcessor2, ActionContinue)
 
 	// Create inner flow
 	innerFlow := NewFlow(innerProcessor1)
@@ -504,7 +507,7 @@ func TestNestedFlowsWithComplexStateManagement(t *testing.T) {
 	}, 1, 1)
 
 	// Connect outer processor to inner flow
-	outerProcessor.AddSuccessor( innerFlow, ActionContinue)
+	outerProcessor.AddSuccessor(innerFlow, ActionContinue)
 
 	// Create main flow that includes the outer processor and inner flow
 	mainFlow := NewFlow(outerProcessor)
@@ -516,7 +519,7 @@ func TestNestedFlowsWithComplexStateManagement(t *testing.T) {
 		"nested_level": 0,
 	}
 
-	finalAction := mainFlow.Run(initialState)
+	finalAction := mainFlow.Run(&initialState)
 
 	// Verify successful execution
 	if finalAction != ActionSuccess {
@@ -570,7 +573,7 @@ func TestActionBasedRouting(t *testing.T) {
 	}, 1, 1)
 
 	// Connect routing processor to success processor
-	routingProcessor.AddSuccessor( successProcessor, ActionContinue)
+	routingProcessor.AddSuccessor(successProcessor, ActionContinue)
 
 	// Test the routing
 	flow := NewFlow(routingProcessor)
@@ -578,7 +581,7 @@ func TestActionBasedRouting(t *testing.T) {
 		"input_data": []interface{}{10},
 	}
 
-	finalAction := flow.Run(state)
+	finalAction := flow.Run(&state)
 	if finalAction != ActionSuccess {
 		t.Errorf("Expected ActionSuccess, got %v", finalAction)
 	}
@@ -629,7 +632,7 @@ func TestConcurrentWorkflowExecutionSafety(t *testing.T) {
 				"flow_id":    index,
 			}
 
-			action := flow.Run(state)
+			action := flow.Run(&state)
 			results[index] = action
 			states[index] = state
 		}(i)

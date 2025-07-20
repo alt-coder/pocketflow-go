@@ -37,18 +37,27 @@ func NewNode[State any, PrepResult any, ExecResults any](basenode BaseNode[State
 	return createNode(basenode, maxRetries, maxRoutines)
 }
 
-// Run implements the Workflow interface and executes the three-phase execution model
-func (n *Node[State, PrepResult, ExecResults]) Run(state State) Action {
+// executeWithRetry handles the retry logic and execution of a single item
+func (n *Node[State, PrepResult, ExecResults]) executeWithRetry(input PrepResult) (ExecResults, error) {
+	var execResult ExecResults
+	var err error
 
+	for i := 0; i < n.maxRetries+1; i++ {
+		execResult, err = n.node.Exec(input)
+		if err == nil {
+			return execResult, nil
+		}
+	}
+	return execResult, err
+}
+
+// Run implements the Workflow interface and executes the three-phase execution model
+func (n *Node[State, PrepResult, ExecResults]) Run(state *State) Action {
 	prepRes := n.node.Prep(state)
 	if len(prepRes) == 0 {
 		// Nothing to execute, just call Post.
 		return n.node.Post(state, prepRes)
 	}
-
-	wg := &sync.WaitGroup{}
-	prepResults := make(chan task[PrepResult], len(prepRes))
-	execResults := make([]ExecResults, len(prepRes))
 
 	numWorkers := n.routines
 	if numWorkers > len(prepRes) {
@@ -56,43 +65,46 @@ func (n *Node[State, PrepResult, ExecResults]) Run(state State) Action {
 		numWorkers = len(prepRes)
 	}
 
-	// Create a worker function that uses local variables
-	worker := func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		for item := range prepResults {
-			var execResult ExecResults
-			var err error
+	execResults := make([]ExecResults, len(prepRes))
 
-			// Retry logic: Try once, then retry up to maxRetries times. Total attempts: maxRetries + 1.
-			for i := 0; i < n.maxRetries+1; i++ {
-				// Execute with PrepResult input from Prep results
-				execResult, err = n.node.Exec(item.result)
-				if err == nil {
-					// Store ExecResults result directly
-					execResults[item.pos] = execResult
-					break
-				}
-			}
-
-			// Fallback handling for ExecResults return types
+	if numWorkers == 1 {
+		// Single worker case - no goroutines needed
+		for i, item := range prepRes {
+			execResult, err := n.executeWithRetry(item)
 			if err != nil {
-				// ExecFallback returns ExecResults which matches our type
-				fallbackResult := n.node.ExecFallback(err)
-				execResults[item.pos] = fallbackResult
+				execResults[i] = n.node.ExecFallback(err)
+			} else {
+				execResults[i] = execResult
 			}
 		}
-	}
+	} else {
+		// Multi-worker case with goroutines
+		wg := &sync.WaitGroup{}
+		prepResults := make(chan task[PrepResult], len(prepRes))
 
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go worker(wg)
-	}
+		worker := func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			for item := range prepResults {
+				execResult, err := n.executeWithRetry(item.result)
+				if err != nil {
+					execResults[item.pos] = n.node.ExecFallback(err)
+				} else {
+					execResults[item.pos] = execResult
+				}
+			}
+		}
 
-	for i, item := range prepRes {
-		prepResults <- task[PrepResult]{pos: i, result: item}
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go worker(wg)
+		}
+
+		for i, item := range prepRes {
+			prepResults <- task[PrepResult]{pos: i, result: item}
+		}
+		close(prepResults)
+		wg.Wait()
 	}
-	close(prepResults)
-	wg.Wait()
 
 	return n.node.Post(state, prepRes, execResults...)
 }
@@ -116,16 +128,17 @@ func (n *Node[State, PrepResult, ExecResults]) GetSuccessors() map[Action]Workfl
 }
 
 // AddSuccessor adds successor based on action with proper validation
-func (n *Node[State, PrepResult, ExecResults]) AddSuccessor(workflow Workflow[State], action ...Action) {
+func (n *Node[State, PrepResult, ExecResults]) AddSuccessor(workflow Workflow[State], action ...Action) Workflow[State] {
 	// Validate inputs - don't add if action is empty or workflow is nil
 	if workflow == nil {
-		return
+		return workflow
 	}
-	if len(action) ==  0 {
+	if len(action) == 0 {
 		n.successors[ActionDefault] = workflow
-		return 
+		return workflow
 	}
 	n.successors[action[0]] = workflow
+	return workflow
 }
 
 // GetSuccessor gets the next WorkFlow as per action.

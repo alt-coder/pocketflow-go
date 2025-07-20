@@ -1,6 +1,32 @@
 # PocketFlow Go
 
+[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8.svg)](https://golang.org/dl/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Go Report Card](https://goreportcard.com/badge/github.com/alt-coder/pocketflow-go)](https://goreportcard.com/report/github.com/alt-coder/pocketflow-go)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
+
 A Go port of the [PocketFlow](https://github.com/The-Pocket/PocketFlow) framework - a minimalist 100-line LLM framework that captures the core abstraction of LLM frameworks: **Graph**.
+
+## Table of Contents
+
+- [Philosophy](#philosophy)
+- [Why PocketFlow?](#why-pocketflow)
+- [Architecture](#architecture)
+  - [High-Level Architecture](#high-level-architecture)
+  - [Node Execution Lifecycle](#node-execution-lifecycle)
+  - [Flow Control](#flow-control)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Core Components](#core-components)
+- [Specialized Nodes](#specialized-nodes)
+- [State Management](#state-management)
+- [LLM Providers](#llm-providers)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Contributing](#contributing)
+- [License](#license)
+- [Roadmap](#roadmap)
 
 ## Philosophy
 
@@ -15,18 +41,6 @@ Go's type system, concurrency model, and explicit error handling naturally lead 
 - **Production readiness**: Comprehensive error handling and testing from day one
 - **Zero vendor lock-in**: No dependencies on specific LLM providers
 - **Composable architecture**: Easy to extend and customize for specific use cases
-
-## Original Framework
-
-PocketFlow was originally created by [The Pocket](https://github.com/The-Pocket) as a Python framework that demonstrates how LLM applications can be built with minimal code. The core insight is that most LLM frameworks overcomplicate what is essentially a graph execution problem.
-
-**Key principles from the original:**
-- **Graph-based execution**: Everything is a node in a graph
-- **Minimalist design**: Focus on core abstractions, not bloated wrappers  
-- **Agentic coding**: Let AI agents build agents for 10x productivity
-- **Composable patterns**: Easy to implement Agents, Workflows, RAG, etc.
-
-This Go implementation extends those principles with strong typing, concurrency, and Go's ecosystem while maintaining the elegant simplicity of the original design.
 
 ## Why PocketFlow?
 
@@ -49,6 +63,57 @@ While other frameworks add layers of abstraction and vendor-specific wrappers, P
 - **Production Ready**: Comprehensive error handling and testing
 - **Zero Vendor Lock-in**: No dependencies on specific LLM providers
 - **Extensible**: Clean interfaces make it easy to add custom nodes
+
+## Architecture
+
+### High-Level Architecture
+
+PocketFlow's architecture is composed of three core concepts: the **Flow** (the orchestrator), the **Node** (the execution unit), and the **BaseNode** (the user-defined logic).
+
+```mermaid
+graph TD
+    subgraph User-Facing
+        A[Workflow: Flow]
+    end
+    subgraph Framework Core
+        B[Execution Unit: Node]
+    end
+    subgraph User Implementation
+        C[Business Logic: BaseNode]
+    end
+
+    A -- Manages & Orchestrates --> B;
+    B -- Wraps & Executes --> C;
+```
+
+### Node Execution Lifecycle
+
+Each node follows a three-phase execution model: `Prep` -> `Exec` -> `Post`. This ensures a clear separation of concerns, from data preparation to execution and state management.
+
+```mermaid
+graph TD
+    subgraph Node Lifecycle
+        direction LR
+        Prep(Prep) -- Prepares data --> Exec(Exec);
+        Exec -- On Success --> Post(Post);
+        Exec -- On Error --> Fallback(ExecFallback);
+        Fallback -- Provides default --> Post;
+        Post -- Returns Action --> End((End));
+    end
+```
+
+### Flow Control
+
+Workflows are constructed by chaining nodes together. The `Action` returned by a node's `Post` method determines which node to execute next.
+
+```mermaid
+graph TD
+    Start([Start Flow]) --> Node1;
+    Node1 -- ActionSuccess --> Node2;
+    Node1 -- ActionFailure --> Node3;
+    Node2 --> End([End Flow]);
+    Node3 --> End;
+```
 
 ## Features
 
@@ -127,9 +192,7 @@ func main() {
 }
 ```
 
-## Architecture
-
-### Core Components
+## Core Components
 
 - **BaseNode**: Interface defining the three-phase execution model (Prep → Exec → Post)
 - **Node**: Wrapper providing retry logic and concurrency control, implements Workflow
@@ -154,48 +217,6 @@ type BaseNode[State any, PrepResult any, ExecResults any] interface {
     ExecFallback(err error) ExecResults
     Post(state State, prepResults []PrepResult, execResults ...ExecResults) Action
 }
-```
-
-## Specialized Nodes
-
-### RetryNode
-Handles structured output validation with automatic retries:
-
-```go
-config := retry.RetryNodeConfig{
-    Name:         "DataExtractor",
-    Prompt:       "Extract structured data as JSON",
-    OutputSchema: MyStruct{},
-    MaxRetries:   3,
-    LLMProvider:  provider,
-}
-retryNode := retry.NewRetryNode(config)
-```
-
-## Flow Control
-
-Flows use actions to control transitions between nodes:
-
-- `ActionSuccess`: Continue to success path
-- `ActionFailure`: Continue to failure path  
-- `ActionRetry`: Retry current node
-- `ActionContinue`: Continue to default next node
-- `ActionDefault`: Use default transition
-
-### Chaining Nodes
-
-```go
-node1 := core.NewNode[map[string]any, string, string](baseNode1, 3, 1)
-node2 := core.NewNode[map[string]any, string, string](baseNode2, 3, 1)
-node3 := core.NewNode[map[string]any, string, string](baseNode3, 3, 1)
-
-// Chain nodes based on actions
-node1.AddSuccessor(node2, core.ActionSuccess)
-node1.AddSuccessor(node3, core.ActionFailure)
-node2.AddSuccessor(node3, core.ActionSuccess)
-
-// Create flow with start node
-flow := core.NewFlow[map[string]any](node1)
 ```
 
 ## State Management
@@ -267,34 +288,25 @@ go test ./...
 ## Project Structure
 
 ```
-
-├── core/                   # Core framework components
-│   ├── interfaces.go       # Core interfaces (Workflow, BaseNode)
-│   ├── node.go            # Node implementation with retry logic
-│   ├── flow.go            # Flow orchestration
-│   ├── types.go           # State, Action, and other types
-│   └── *_test.go          # Core tests
-```
-
-## Configuration
-
-### Node Configuration
-
-```go
-node := core.NewNode[map[string]any, string, string](baseNode, maxRetries, maxWorkers)
-node.SetMaxRetries(5)
-node.SetMaxRoutines(3)
-```
-
-### Flow Configuration
-
-```go
-// Create flow with start node
-flow := core.NewFlow[map[string]any](startNode)
-
-// Execute flow with initial state
-state := map[string]any{"key": "value"}
-action := flow.Run(state)
+.
+├── core/
+│   ├── interfaces.go
+│   ├── node.go
+│   ├── flow.go
+│   └── types.go
+├── examples/
+│   ├── basic-chat/
+│   └── basic_workflow/
+├── llm/
+│   ├── gemini/
+│   └── mock.go
+├── nodes/
+│   ├── retry/
+│   └── tools/
+├── providers/
+│   └── llm/
+├── go.mod
+└── README.md
 ```
 
 ## Contributing
@@ -305,13 +317,13 @@ action := flow.Run(state)
 4. Ensure all tests pass: `go test ./...`
 5. Submit a pull request
 
+## Acknowledgements
+
+A special thanks to [Zachary Huang](https://github.com/zachary62) for creating the original Python version of [PocketFlow](https://github.com/The-Pocket/PocketFlow). His work provided the foundational concepts and inspiration for this Go port.
+
 ## License
 
 MIT License
-
-## Dependencies
-
-- Go 1.23.7+
 
 ## Roadmap
 

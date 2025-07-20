@@ -16,7 +16,7 @@ type TestBaseNode struct {
 }
 
 // Prep returns the configured prep results as []any
-func (t *TestBaseNode) Prep(state State) []any {
+func (t *TestBaseNode) Prep(state *State) []any {
 	return t.prepResults
 }
 
@@ -32,7 +32,7 @@ func (t *TestBaseNode) Exec(prepResult any) (any, error) {
 }
 
 // Post processes any parameters and returns an Action
-func (t *TestBaseNode) Post(state State, prepResults []any, execResults ...any) Action {
+func (t *TestBaseNode) Post(state *State, prepResults []any, execResults ...any) Action {
 	return t.postAction
 }
 
@@ -46,37 +46,37 @@ func TestBaseNode_Prep_InterfaceSliceReturn(t *testing.T) {
 	tests := []struct {
 		name        string
 		prepResults []any
-		state       State
+		state       *State
 		expected    []any
 	}{
 		{
 			name:        "Empty slice return",
 			prepResults: []any{},
-			state:       State{"key": "value"},
+			state:       &State{"key": "value"},
 			expected:    []any{},
 		},
 		{
 			name:        "String values",
 			prepResults: []any{"task1", "task2", "task3"},
-			state:       State{"key": "value"},
+			state:       &State{"key": "value"},
 			expected:    []any{"task1", "task2", "task3"},
 		},
 		{
 			name:        "Mixed types",
 			prepResults: []any{42, "string", true, 3.14, map[string]string{"key": "value"}},
-			state:       State{"key": "value"},
+			state:       &State{"key": "value"},
 			expected:    []any{42, "string", true, 3.14, map[string]string{"key": "value"}},
 		},
 		{
 			name:        "Nil values",
 			prepResults: []any{nil, "valid", nil},
-			state:       State{"key": "value"},
+			state:       &State{"key": "value"},
 			expected:    []any{nil, "valid", nil},
 		},
 		{
 			name:        "Complex structures",
 			prepResults: []any{[]int{1, 2, 3}, map[string]any{"nested": "value"}},
-			state:       State{"key": "value"},
+			state:       &State{"key": "value"},
 			expected:    []any{[]int{1, 2, 3}, map[string]any{"nested": "value"}},
 		},
 	}
@@ -245,7 +245,7 @@ func TestBaseNode_Post_InterfaceParameters(t *testing.T) {
 				postAction: tt.postAction,
 			}
 
-			result := baseNode.Post(tt.state, tt.prepResults, tt.execResults...)
+			result := baseNode.Post(&tt.state, tt.prepResults, tt.execResults...)
 
 			if result != tt.expectedAction {
 				t.Errorf("Post() = %v, expected %v", result, tt.expectedAction)
@@ -342,7 +342,7 @@ func TestBaseNode_IntegrationWorkflow(t *testing.T) {
 	state := State{"test": "integration"}
 
 	// Test Prep phase
-	prepResult := baseNode.Prep(state)
+	prepResult := baseNode.Prep(&state)
 	if !reflect.DeepEqual(prepResult, prepData) {
 		t.Errorf("Integration Prep() = %v, expected %v", prepResult, prepData)
 	}
@@ -370,7 +370,7 @@ func TestBaseNode_IntegrationWorkflow(t *testing.T) {
 	}
 
 	// Test Post phase
-	postResult := baseNode.Post(state, prepResult, execResultsSlice...)
+	postResult := baseNode.Post(&state, prepResult, execResultsSlice...)
 	if postResult != ActionSuccess {
 		t.Errorf("Integration Post() = %v, expected %v", postResult, ActionSuccess)
 	}
@@ -384,7 +384,7 @@ func TestBaseNode_InterfaceCompliance(t *testing.T) {
 	baseNode := &TestBaseNode{}
 
 	// Test method signatures match interface requirements
-	prepResult := baseNode.Prep(State{})
+	prepResult := baseNode.Prep(&State{})
 	if reflect.TypeOf(prepResult).String() != "[]interface {}" {
 		t.Errorf("Prep method signature incorrect, got %s", reflect.TypeOf(prepResult))
 	}
@@ -395,7 +395,7 @@ func TestBaseNode_InterfaceCompliance(t *testing.T) {
 		t.Log("Exec method correctly returns any")
 	}
 
-	postResult := baseNode.Post(State{}, []any{}, "test")
+	postResult := baseNode.Post(&State{}, []any{}, "test")
 	if reflect.TypeOf(postResult).String() != "core.Action" {
 		t.Errorf("Post method signature incorrect, got %s", reflect.TypeOf(postResult))
 	}
