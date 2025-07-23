@@ -33,7 +33,7 @@ func NewMockProvider(name string) *MockProvider {
 }
 
 // CallLLM simulates an LLM call and returns configured responses or errors
-func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string, error) {
+func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (Message, error) {
 	m.callCount++
 
 	// Check for delayed error simulation
@@ -44,7 +44,7 @@ func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string,
 				if msg, ok := m.config["delayedErrorMessage"].(string); ok && msg != "" {
 					errorMsg = msg
 				}
-				return "", fmt.Errorf(errorMsg)
+				return Message{}, fmt.Errorf(errorMsg)
 			}
 		}
 	}
@@ -52,9 +52,9 @@ func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string,
 	// Simulate immediate error if configured
 	if m.simulateError {
 		if m.errorMessage != "" {
-			return "", fmt.Errorf(m.errorMessage)
+			return Message{}, fmt.Errorf(m.errorMessage)
 		}
-		return "", fmt.Errorf("simulated API error from %s", m.name)
+		return Message{}, fmt.Errorf("simulated API error from %s", m.name)
 	}
 
 	// Check for pattern-based responses first
@@ -66,7 +66,10 @@ func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string,
 			// Check for pattern matches
 			for pattern, response := range m.patterns {
 				if strings.Contains(userInput, strings.ToLower(pattern)) {
-					return response, nil
+					return Message{
+						Role:    RoleAssistant,
+						Content: response,
+					}, nil
 				}
 			}
 		}
@@ -74,7 +77,10 @@ func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string,
 
 	// Return configured response if no pattern match
 	if len(m.responses) == 0 {
-		return "Default mock response", nil
+		return Message{
+			Role:    RoleAssistant,
+			Content: "Default mock response",
+		}, nil
 	}
 
 	response := m.responses[m.responseIndex]
@@ -90,7 +96,10 @@ func (m *MockProvider) CallLLM(ctx context.Context, messages []Message) (string,
 		}
 	}
 
-	return response, nil
+	return Message{
+		Role:    RoleAssistant,
+		Content: response,
+	}, nil
 }
 
 // GetName returns the mock provider name
@@ -157,4 +166,9 @@ func (m *MockProvider) ClearError() {
 	delete(m.config, "delayedError")
 	delete(m.config, "callsBeforeError")
 	delete(m.config, "delayedErrorMessage")
+}
+
+func (m *MockProvider) SetResponse(message Message) {
+	m.responses = []string{message.Content}
+
 }

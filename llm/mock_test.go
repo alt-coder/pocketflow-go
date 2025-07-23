@@ -31,8 +31,12 @@ func TestMockProvider_CallLLM_BasicResponse(t *testing.T) {
 	}
 
 	expected := "Mock response to: Hello"
-	if response != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, response)
+	if response.Content != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, response.Content)
+	}
+
+	if response.Role != RoleAssistant {
+		t.Errorf("Expected role '%s', got '%s'", RoleAssistant, response.Role)
 	}
 
 	if provider.GetCallCount() != 1 {
@@ -59,8 +63,8 @@ func TestMockProvider_SetResponses(t *testing.T) {
 		}
 
 		expected := "Mock response to: Test"
-		if response != expected {
-			t.Errorf("Call %d: Expected '%s', got '%s'", i+1, expected, response)
+		if response.Content != expected {
+			t.Errorf("Call %d: Expected '%s', got '%s'", i+1, expected, response.Content)
 		}
 	}
 }
@@ -85,8 +89,8 @@ func TestMockProvider_ErrorSimulation(t *testing.T) {
 		t.Errorf("Expected 'Test error message', got '%s'", err.Error())
 	}
 
-	if response != "" {
-		t.Errorf("Expected empty response on error, got '%s'", response)
+	if response.Content != "" {
+		t.Errorf("Expected empty response on error, got '%s'", response.Content)
 	}
 }
 
@@ -111,8 +115,8 @@ func TestMockProvider_ErrorSimulation_DefaultMessage(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expected, err.Error())
 	}
 
-	if response != "" {
-		t.Errorf("Expected empty response on error, got '%s'", response)
+	if response.Content != "" {
+		t.Errorf("Expected empty response on error, got '%s'", response.Content)
 	}
 }
 
@@ -133,7 +137,7 @@ func TestMockProvider_DelayedError(t *testing.T) {
 		if err != nil {
 			t.Errorf("Call %d: Unexpected error: %v", i+1, err)
 		}
-		if response == "" {
+		if response.Content == "" {
 			t.Errorf("Call %d: Expected response, got empty string", i+1)
 		}
 	}
@@ -148,8 +152,8 @@ func TestMockProvider_DelayedError(t *testing.T) {
 		t.Errorf("Expected 'Delayed error occurred', got '%s'", err.Error())
 	}
 
-	if response != "" {
-		t.Errorf("Expected empty response on error, got '%s'", response)
+	if response.Content != "" {
+		t.Errorf("Expected empty response on error, got '%s'", response.Content)
 	}
 }
 
@@ -186,8 +190,12 @@ func TestMockProvider_ResponsePatterns(t *testing.T) {
 			t.Errorf("Unexpected error for input '%s': %v", tc.input, err)
 		}
 
-		if response != tc.expected {
-			t.Errorf("Input '%s': Expected '%s', got '%s'", tc.input, tc.expected, response)
+		if response.Content != tc.expected {
+			t.Errorf("Input '%s': Expected '%s', got '%s'", tc.input, tc.expected, response.Content)
+		}
+
+		if response.Role != RoleAssistant {
+			t.Errorf("Expected role '%s', got '%s'", RoleAssistant, response.Role)
 		}
 	}
 }
@@ -205,9 +213,6 @@ func TestMockProvider_SetConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error setting config: %v", err)
 	}
-
-	// Verify config was set (we can't directly access it, but we can test it doesn't error)
-	// In a real implementation, you might want to add a GetConfig method for testing
 }
 
 func TestMockProvider_Reset(t *testing.T) {
@@ -239,8 +244,8 @@ func TestMockProvider_Reset(t *testing.T) {
 
 	// Should use default response pattern (not the custom pattern)
 	expected := "Mock response to: test"
-	if response != expected {
-		t.Errorf("Expected '%s' after reset, got '%s'", expected, response)
+	if response.Content != expected {
+		t.Errorf("Expected '%s' after reset, got '%s'", expected, response.Content)
 	}
 }
 
@@ -268,7 +273,7 @@ func TestMockProvider_ClearError(t *testing.T) {
 		t.Errorf("Unexpected error after clearing: %v", err)
 	}
 
-	if response == "" {
+	if response.Content == "" {
 		t.Error("Expected response after clearing error, got empty string")
 	}
 }
@@ -286,15 +291,15 @@ func TestMockProvider_AddResponse(t *testing.T) {
 	// The original default response should still be first
 	response1, _ := provider.CallLLM(ctx, messages)
 	expected1 := "Mock response to: test"
-	if response1 != expected1 {
-		t.Errorf("First call: Expected '%s', got '%s'", expected1, response1)
+	if response1.Content != expected1 {
+		t.Errorf("First call: Expected '%s', got '%s'", expected1, response1.Content)
 	}
 
 	// Then our added responses
 	response2, _ := provider.CallLLM(ctx, messages)
 	expected2 := "Mock response to: test"
-	if response2 != expected2 {
-		t.Errorf("Second call: Expected '%s', got '%s'", expected2, response2)
+	if response2.Content != expected2 {
+		t.Errorf("Second call: Expected '%s', got '%s'", expected2, response2.Content)
 	}
 }
 
@@ -309,8 +314,12 @@ func TestMockProvider_EmptyMessages(t *testing.T) {
 	}
 
 	expected := "Mock response from test-mock"
-	if response != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, response)
+	if response.Content != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, response.Content)
+	}
+
+	if response.Role != RoleAssistant {
+		t.Errorf("Expected role '%s', got '%s'", RoleAssistant, response.Role)
 	}
 }
 
@@ -329,7 +338,135 @@ func TestMockProvider_NonUserMessage(t *testing.T) {
 	}
 
 	expected := "Mock response from test-mock"
-	if response != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, response)
+	if response.Content != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, response.Content)
+	}
+
+	if response.Role != RoleAssistant {
+		t.Errorf("Expected role '%s', got '%s'", RoleAssistant, response.Role)
+	}
+}
+
+func TestMockProvider_SetResponse(t *testing.T) {
+	provider := NewMockProvider("test-mock")
+	ctx := context.Background()
+
+	// Test the SetResponse method
+	testMessage := Message{
+		Role:    RoleAssistant,
+		Content: "Custom single response",
+	}
+	provider.SetResponse(testMessage)
+
+	messages := []Message{{Role: "user", Content: "Hello"}}
+
+	response, err := provider.CallLLM(ctx, messages)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	expected := "Mock response to: Hello"
+	if response.Content != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, response.Content)
+	}
+}
+
+func TestMockProvider_DelayedError_DefaultMessage(t *testing.T) {
+	provider := NewMockProvider("test-mock")
+	ctx := context.Background()
+
+	// Set delayed error with default message
+	provider.SetDelayedError(2, "")
+
+	messages := []Message{{Role: "user", Content: "Hello"}}
+
+	// First call should succeed
+	_, err := provider.CallLLM(ctx, messages)
+	if err != nil {
+		t.Errorf("First call: Unexpected error: %v", err)
+	}
+
+	// Second call should fail with default message
+	_, err = provider.CallLLM(ctx, messages)
+	if err == nil {
+		t.Error("Expected delayed error on second call, got nil")
+	}
+
+	expected := "delayed simulated error"
+	if err.Error() != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, err.Error())
+	}
+}
+
+func TestMockProvider_ClearError_DelayedError(t *testing.T) {
+	provider := NewMockProvider("test-mock")
+	ctx := context.Background()
+
+	// Set delayed error
+	provider.SetDelayedError(1, "Delayed error")
+
+	messages := []Message{{Role: "user", Content: "Hello"}}
+
+	// First call should fail
+	_, err := provider.CallLLM(ctx, messages)
+	if err == nil {
+		t.Error("Expected delayed error on first call, got nil")
+	}
+
+	// Clear error
+	provider.ClearError()
+
+	// Should not error after clearing
+	response, err := provider.CallLLM(ctx, messages)
+	if err != nil {
+		t.Errorf("Unexpected error after clearing delayed error: %v", err)
+	}
+
+	if response.Content == "" {
+		t.Error("Expected response after clearing delayed error, got empty string")
+	}
+}
+
+func TestMockProvider_PatternPriority(t *testing.T) {
+	provider := NewMockProvider("test-mock")
+	ctx := context.Background()
+
+	// Set both patterns and custom responses
+	provider.SetResponses([]string{"Custom response"})
+	provider.SetResponsePattern(map[string]string{
+		"pattern": "Pattern matched response",
+	})
+
+	messages := []Message{{Role: "user", Content: "This matches pattern"}}
+
+	response, err := provider.CallLLM(ctx, messages)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Pattern should take priority
+	expected := "Pattern matched response"
+	if response.Content != expected {
+		t.Errorf("Expected pattern response '%s', got '%s'", expected, response.Content)
+	}
+}
+
+func TestMockProvider_EmptyResponsesList(t *testing.T) {
+	provider := NewMockProvider("test-mock")
+	ctx := context.Background()
+
+	// Set empty responses list
+	provider.SetResponses([]string{})
+
+	messages := []Message{{Role: "user", Content: "Hello"}}
+
+	response, err := provider.CallLLM(ctx, messages)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	expected := "Default mock response"
+	if response.Content != expected {
+		t.Errorf("Expected default response '%s', got '%s'", expected, response.Content)
 	}
 }

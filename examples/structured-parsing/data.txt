@@ -1,0 +1,58 @@
+Sarah Johnson
+sarah.johnson@email.com
+(555) 123-4567
+LinkedIn: linkedin.com/in/sarahjohnson
+
+PROFESSIONAL SUMMARY
+Experienced software engineer with 8+ years in full-stack development, team leadership, and project management. Proven track record of delivering scalable solutions using Python, modern web technologies, and data analysis tools. Strong background in CRM software implementation and public speaking at technical conferences.
+
+WORK EXPERIENCE
+
+Senior Software Engineer | TechCorp Solutions | 2020 - Present
+• Lead a team of 5 developers in building customer-facing web applications
+• Implemented CRM software integration that increased sales efficiency by 30%
+• Manage project timelines and coordinate with cross-functional teams
+• Conduct code reviews and mentor junior developers
+• Present technical solutions to stakeholders and clients
+
+Software Developer | DataFlow Inc | 2018 - 2020
+• Developed Python-based data analysis pipelines processing 1M+ records daily
+• Built interactive dashboards using modern JavaScript frameworks
+• Collaborated with data science team on machine learning model deployment
+• Participated in agile development processes and sprint planning
+
+Junior Developer | StartupXYZ | 2016 - 2018
+• Created web applications using Python Flask and React
+• Performed data analysis and reporting using pandas and matplotlib
+• Maintained Microsoft Office automation tools for business processes
+• Supported legacy system migrations and database optimizations
+
+TECHNICAL SKILLS
+• Programming Languages: Python, JavaScript, SQL, HTML/CSS
+• Frameworks: Flask, Django, React, Node.js
+• Databases: PostgreSQL, MongoDB, MySQL
+• Tools: Git, Docker, AWS, Microsoft Office Suite
+• Data Analysis: pandas, numpy, matplotlib, Jupyter notebooks
+• Project Management: Jira, Trello, Agile methodologies
+
+LEADERSHIP & COMMUNICATION
+• Team leadership and management experience with 5+ direct reports
+• Regular public speaking at Python conferences and meetups
+• Project management certification (PMP equivalent)
+• Cross-functional collaboration with sales, marketing, and product teams
+
+EDUCATION
+Bachelor of Science in Computer Science
+University of Technology | 2016
+Relevant Coursework: Data Structures, Algorithms, Database Systems, Software Engineering
+
+CERTIFICATIONS
+• AWS Certified Solutions Architect
+• Python Institute Certified Python Programmer
+• Project Management Professional (PMP)
+
+ACHIEVEMENTS
+• Led team that won "Best Innovation" award at company hackathon 2022
+• Increased system performance by 40% through database optimization
+• Successfully managed $2M+ software development projects
+• Published 3 technical articles on Python best practices
