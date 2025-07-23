@@ -54,10 +54,6 @@ func (v *ResumeValidator) Validate(data *ResumeData) error {
 		if data.Experience == nil {
 			validationErrors = append(validationErrors, "experience field is required but missing")
 		}
-
-		if data.SkillIndexes == nil {
-			validationErrors = append(validationErrors, "skill_indexes field is required but missing")
-		}
 	}
 
 	// Validate email format

@@ -118,6 +118,7 @@ func (r *ResumeParserNode) Exec(prepResult PrepResult) (ExecResult, error) {
 	if err != nil {
 		return result, err
 	}
+	fmt.Println(result.Data)
 
 	// Validate the result
 	if err := r.ValidateResult(result); err != nil {
@@ -147,6 +148,7 @@ func (r *ResumeParserNode) Post(state *ResumeParserState, prepRes []PrepResult, 
 	if state.Context == nil {
 		state.Context = make(map[string]interface{})
 	}
+	fmt.Println(len(execResults), execResults)
 	for num, execResult := range execResults {
 		// Display results
 		if execResult.Data != nil {
