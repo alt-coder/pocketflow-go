@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -15,16 +16,22 @@ type Config struct {
 	Temperature float32       // Default: 0.7
 	MaxRetries  int           // Default: 3
 	Backend     genai.Backend // Default: genai.BackendGeminiAPI
+
+	// Rate limiting configuration (optional)
+	RateLimit         int           // Requests per minute, 0 = disabled (default)
+	RateLimitInterval time.Duration // Rate limit window, default: 1 minute
 }
 
 // NewConfigFromEnv creates config from environment variables with sensible defaults
 func NewConfigFromEnv() (*Config, error) {
 	config := &Config{
-		APIKey:      getEnvOrDefault("GOOGLE_API_KEY", ""),
-		Model:       getEnvOrDefault("CHAT_MODEL", "gemini-2.0-flash"),
-		Temperature: getEnvFloatOrDefault("CHAT_TEMPERATURE", 0.7),
-		MaxRetries:  getEnvIntOrDefault("CHAT_MAX_RETRIES", 3),
-		Backend:     genai.BackendGeminiAPI,
+		APIKey:            getEnvOrDefault("GOOGLE_API_KEY", ""),
+		Model:             getEnvOrDefault("CHAT_MODEL", "gemini-2.0-flash"),
+		Temperature:       getEnvFloatOrDefault("CHAT_TEMPERATURE", 0.7),
+		MaxRetries:        getEnvIntOrDefault("CHAT_MAX_RETRIES", 3),
+		Backend:           genai.BackendGeminiAPI,
+		RateLimit:         getEnvIntOrDefault("GEMINI_RATE_LIMIT", 0),
+		RateLimitInterval: time.Duration(getEnvIntOrDefault("GEMINI_RATE_LIMIT_INTERVAL_SECONDS", 60)) * time.Second,
 	}
 
 	// Validate required configuration
@@ -51,6 +58,14 @@ func (c *Config) Validate() error {
 
 	if c.MaxRetries < 0 {
 		return fmt.Errorf("maxRetries cannot be negative, got %d", c.MaxRetries)
+	}
+
+	if c.RateLimit < 0 {
+		return fmt.Errorf("rateLimit cannot be negative, got %d", c.RateLimit)
+	}
+
+	if c.RateLimit > 0 && c.RateLimitInterval <= 0 {
+		return fmt.Errorf("rateLimitInterval must be positive when rate limiting is enabled, got %v", c.RateLimitInterval)
 	}
 
 	return nil

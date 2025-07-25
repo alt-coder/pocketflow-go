@@ -594,7 +594,7 @@ func TestWorkflowInterface_Compliance(t *testing.T) {
 
 	// Test that all implementations have the required methods
 	baseNode := &TestBaseNode{postAction: ActionSuccess}
-	node := NewNode[State, any, any](baseNode, 1, 1)
+	node := NewNode(baseNode, 1, 1)
 
 	// Test Node method signatures - check that methods exist and have correct basic structure
 	runType := reflect.TypeOf(node.Run).String()

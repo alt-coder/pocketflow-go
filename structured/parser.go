@@ -93,7 +93,7 @@ func ParseWithPrompt[T any](p *Parser, ctx context.Context, customPrompt string)
 	}
 
 	// Parse the response into the target type
-	return parseResponse[T](response.Content)
+	return ParseResponse[T](response.Content)
 }
 
 // ParseWithStructuredPrompt generates a structured prompt for type T and executes parsing
@@ -121,8 +121,8 @@ func ParseWithStructuredPrompt[T any](p *Parser, ctx context.Context, inputData 
 	return ParseWithPrompt[T](p, ctx, promptBuilder.String())
 }
 
-// parseResponse parses LLM response content into the target type T
-func parseResponse[T any](responseContent string) (ParseResult[T], error) {
+// ParseResponse parses LLM response content into the target type T
+func ParseResponse[T any](responseContent string) (ParseResult[T], error) {
 	var result T
 
 	// Try YAML parsing first

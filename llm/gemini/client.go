@@ -3,6 +3,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/alt-coder/pocketflow-go/llm"
 	"google.golang.org/genai"
@@ -12,6 +13,10 @@ import (
 type GeminiClient struct {
 	genaiClient *genai.Client
 	config      *Config
+
+	// Rate limiting
+	rateLimiter *time.Ticker
+	tokens      chan struct{}
 }
 
 // CallLLM implements the generic interface, converting messages internally
@@ -19,6 +24,16 @@ func (c *GeminiClient) CallLLM(ctx context.Context, messages []llm.Message) (llm
 	result := llm.Message{}
 	if len(messages) == 0 {
 		return result, fmt.Errorf("no messages to send")
+	}
+
+	// Apply rate limiting if enabled
+	if c.tokens != nil {
+		select {
+		case <-c.tokens:
+			// Token acquired, proceed with request
+		case <-ctx.Done():
+			return result, ctx.Err()
+		}
 	}
 
 	// Convert messages to Gemini format
@@ -59,14 +74,15 @@ func (c *GeminiClient) convertToGenaiMessages(messages []llm.Message) ([]*genai.
 				},
 			},
 		}
-		if len(msg.Media)> 0 {
+		if len(msg.Media) > 0 {
 			content.Parts = append(content.Parts, &genai.Part{
-				InlineData : &genai.Blob{
+				InlineData: &genai.Blob{
 					MIMEType: msg.MimeType,
-					Data: msg.Media,
+					Data:     msg.Media,
 				},
 			})
 		}
+
 
 		genaiMessages = append(genaiMessages, content)
 	}
@@ -74,7 +90,7 @@ func (c *GeminiClient) convertToGenaiMessages(messages []llm.Message) ([]*genai.
 	return genaiMessages, nil
 }
 
-func getRole (role string) string {
+func getRole(role string) string {
 	switch role {
 	case "user":
 		return genai.RoleUser
@@ -109,6 +125,12 @@ func (c *GeminiClient) SetConfig(config map[string]any) error {
 	if maxRetries, ok := config["maxRetries"].(int); ok {
 		c.config.MaxRetries = maxRetries
 	}
+	if rateLimit, ok := config["rateLimit"].(int); ok {
+		c.config.RateLimit = rateLimit
+	}
+	if rateLimitInterval, ok := config["rateLimitInterval"].(time.Duration); ok {
+		c.config.RateLimitInterval = rateLimitInterval
+	}
 
 	return nil
 }
@@ -133,10 +155,29 @@ func NewGeminiClient(ctx context.Context, config *Config) (*GeminiClient, error)
 		return nil, fmt.Errorf("failed to create GenAI client: %w", err)
 	}
 
-	return &GeminiClient{
+	client := &GeminiClient{
 		genaiClient: genaiClient,
 		config:      config,
-	}, nil
+	}
+
+	// Initialize rate limiter only if rate limiting is enabled
+	if config.RateLimit > 0 {
+		tokens := make(chan struct{}, config.RateLimit)
+		rateLimiter := time.NewTicker(config.RateLimitInterval / time.Duration(config.RateLimit))
+
+		// Fill initial tokens
+		for i := 0; i < config.RateLimit; i++ {
+			tokens <- struct{}{}
+		}
+
+		client.rateLimiter = rateLimiter
+		client.tokens = tokens
+
+		// Start token refill goroutine
+		go client.refillTokens()
+	}
+
+	return client, nil
 }
 
 // NewGeminiClientFromEnv creates a new Gemini client using environment variables
@@ -147,4 +188,23 @@ func NewGeminiClientFromEnv(ctx context.Context) (*GeminiClient, error) {
 	}
 
 	return NewGeminiClient(ctx, config)
+}
+
+// refillTokens runs in a goroutine to refill the token bucket at the configured rate
+func (c *GeminiClient) refillTokens() {
+	for range c.rateLimiter.C {
+		select {
+		case c.tokens <- struct{}{}:
+			// Token added successfully
+		default:
+			// Token bucket is full, skip
+		}
+	}
+}
+
+// Close stops the rate limiter and cleans up resources
+func (c *GeminiClient) Close() {
+	if c.rateLimiter != nil {
+		c.rateLimiter.Stop()
+	}
 }

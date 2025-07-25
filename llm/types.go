@@ -9,9 +9,22 @@ type Message struct {
 	Media []byte
 	MimeType  string
 	ToolCalls []ToolCalls
-	ToolResults []string
+	ToolResults []ToolResults
 }
 
+type ToolResults struct {
+	Id string // Unique identifier for the tool call
+	Content string // Tool execution result
+	Media []byte // Optional media content
+	MetaData MetaData // Optional metadata for the tool result
+	IsError bool // Whether the result is an error
+	Error string // Error message if IsError is true
+}
+
+type MetaData struct {
+	ContentType string // MIME type of the content
+	FileName string	 // Optional file name if content is a file
+}
 
 
 type ToolCalls struct{

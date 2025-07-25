@@ -1,0 +1,48 @@
+{
+  "agent": {
+    "max_tool_calls": 5,
+    "max_history": 20,
+    "system_prompt": "You are a helpful assistant with access to various tools. Use tools when necessary to help the user accomplish their tasks.",
+    "temperature": 0.7
+  },
+  "mcp": {
+    "servers": {
+      "browsermcp": {
+        "command": "npx",
+        "args": ["@browsermcp/mcp@latest"]
+      }
+    }
+  },
+  "llm": {
+    "provider": "gemini",
+    "model": "gemma-3-27b-it",
+    "api_key": "",
+    "temperature": 0.7
+  },
+  "user_input": {
+    "prompt": "You: ",
+    "exit_commands": ["exit", "quit", "bye"],
+    "summarization_threshold": 15
+  },
+  "summarizer": {
+    "preserve_recent_count": 5,
+    "summary_prompt": "Please summarize the following conversation history, preserving key context and recent tool interactions:",
+    "max_summary_length": 500
+  },
+  "planning": {
+    "system_prompt": "You are a helpful assistant with access to tools. Analyze the user's request and respond with structured YAML.\n\nFormat your response as:\nintent: \"Brief description of what you're trying to accomplish\"\nresponse: \"Your response to the user\"\ntool_calls: [\"tool1\", \"tool2\"]  # List of tools to call, empty array if none\ntool_args: [{\"arg1\": \"value1\"}, {\"arg2\": \"value2\"}]  # Arguments for each tool call\n\nIf you don't need tools, use empty arrays for tool_calls and tool_args.",
+    "max_tool_calls": 3,
+    "temperature": 0.7,
+    "allowed_tools": []
+  },
+  "approval": {
+    "approval_prompt": "The assistant wants to use tools. Approve? (y/n/a for always): ",
+    "rejection_message": "I understand you don't want me to use those tools. Let me help you in another way."
+  },
+  "tool_execution": {
+    "max_concurrency": 3,
+    "retry_attempts": 2,
+    "failure_mode": "continue",
+    "max_tool_steps": 10
+  }
+}
