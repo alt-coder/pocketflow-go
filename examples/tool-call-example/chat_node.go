@@ -47,9 +47,9 @@ func NewToolUsageFlow[T StateInterface](manager *tools.ToolManager, llmProvider 
 		option(chatNode)
 	}
 	chatNode.key = "chat"
-	chatNode.isUserInputRequired = false
 	node := core.NewNode(chatNode, 3, 1)
 	node.AddSuccessor(node, core.Action(ActionContinue))
+	node.AddSuccessor(node, core.ActionRetry)
 	return core.NewFlow(node)
 }
 
@@ -281,10 +281,11 @@ func (n *ChatNode[T]) buildSystemPromptWithTools(summarizedHistory string) strin
 	promptBuilder.WriteString("    arg2: \"value2\"\n")
 	promptBuilder.WriteString("  - arg1: \"value3\"\n")
 	promptBuilder.WriteString("```\n\n")
-	promptBuilder.WriteString("If no tools are needed, use empty arrays:\n")
-	promptBuilder.WriteString("tool_calls: []\n")
-	promptBuilder.WriteString("tool_args: []\n\n")
-	promptBuilder.WriteString("Analyze the conversation and respond with the structured YAML format.")
+	promptBuilder.WriteString("If no tools are needed or no tool arguments are required, use empty arrays:\n")
+	promptBuilder.WriteString("tool_calls: {}\n")
+	promptBuilder.WriteString("tool_args: {}\n\n ")
+	promptBuilder.WriteString("Please Dont use multiple tool calls if they there is a dependence between them(that is they need to excecuted sequencially not concurrently), instead use a single tool call with all required arguments.\n")
+	promptBuilder.WriteString("Analyze the following request and respond with the structured YAML format That must be parseable.")
 
 	return promptBuilder.String()
 }

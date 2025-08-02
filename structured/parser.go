@@ -220,7 +220,7 @@ func ExtractYAMLFromResponse(response string) string {
 	}
 
 	// Return empty string if no YAML content found
-	return ""
+	return response
 }
 
 // ExtractJSONFromResponse extracts JSON content from LLM response
@@ -297,5 +297,5 @@ func ExtractJSONFromResponse(response string) string {
 		return strings.Join(jsonLines, "\n")
 	}
 
-	return ""
+	return response
 }

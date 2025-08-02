@@ -18,7 +18,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-	fmt.Printf(" Using Gemini : %s with model %s, api_key: %s\n", config.LLM.Provider, config.LLM.Model, config.LLM.APIKey)
+	fmt.Printf(" Using Gemini : %s with model %s\n", config.LLM.Provider, config.LLM.Model)
 	// Initialize MCP tool manager
 	mcpManager := tools.NewMCPManager(config.MCP)
 	if err != nil {
@@ -42,7 +42,7 @@ func main() {
 		Temperature:       config.LLM.Temperature,
 		MaxRetries:        3,
 		RateLimit:         1,
-		RateLimitInterval: 3 * time.Second,
+		RateLimitInterval: 8 * time.Second,
 	}
 
 	llmProvider, err := gemini.NewGeminiClient(ctx, geminiConfig)
