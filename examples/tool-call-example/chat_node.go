@@ -153,7 +153,8 @@ func (n *ChatNode[T]) Post(state *T, prepResults []ChatContext, execResults ...l
 
 	// Add the assistant message to state
 	(*state).AddMessage(execResult)
-
+	// reset error retry count 
+	n.errorRetryCount = 0
 	// Display the response to user
 	fmt.Printf("\nAssistant: %s\n", result.Response)
 
@@ -189,6 +190,7 @@ func (n *ChatNode[T]) Post(state *T, prepResults []ChatContext, execResults ...l
 			}
 		}
 		(*state).AddMessage(responseMessage)
+
 	} else {
 		n.isUserInputRequired = true
 	}
