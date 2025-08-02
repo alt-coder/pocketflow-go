@@ -1,0 +1,38 @@
+{
+  "agent": {
+    "max_tool_calls": 5,
+    "max_history": 20,
+    "system_prompt": "You are a helpful assistant with access to various tools. Use tools when necessary to help the user accomplish their tasks.",
+    "temperature": 0.7
+  },
+  "mcp": {
+    "servers": {
+      "memory": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-memory"
+        ]
+      },
+      "desktop-commander": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@wonderwhy-er/desktop-commander"
+        ]
+      },
+      "browsermcp": {
+        "command": "npx",
+        "args": [
+          "@browsermcp/mcp@latest"
+        ]
+      }
+    }
+  },
+  "llm": {
+    "provider": "gemini",
+    "model": "gemini-2.5-pro",
+    "api_key": "",
+    "temperature": 0.4
+  }
+}
