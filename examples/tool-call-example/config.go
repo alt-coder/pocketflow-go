@@ -10,16 +10,16 @@ import (
 
 // AgentWorkflowConfig represents the complete configuration for the agent workflow
 type AgentWorkflowConfig struct {
-	Agent             *AgentConfig         `json:"agent"`
-	MCP               *tools.MCPConfig           `json:"mcp"`
-	LLM               *LLMConfig           `json:"llm"`
+	Agent *AgentConfig     `json:"agent"`
+	MCP   *tools.MCPConfig `json:"mcp"`
+	LLM   *LLMConfig       `json:"llm"`
 }
 
 // AgentConfig represents the main agent configuration
 type AgentConfig struct {
-	MaxToolCalls int           `json:"max_tool_calls"` // Maximum tool calls per turn
-	MaxHistory   int           `json:"max_history"`    // Maximum conversation history
-	SystemPrompt string        `json:"system_prompt"`  // System prompt for the agent
+	MaxToolCalls int    `json:"max_tool_calls"` // Maximum tool calls per turn
+	MaxHistory   int    `json:"max_history"`    // Maximum conversation history
+	SystemPrompt string `json:"system_prompt"`  // System prompt for the agent
 }
 
 // MCPServerConfig represents configuration for a single MCP server
@@ -36,10 +36,9 @@ type LLMConfig struct {
 	Provider    string  `json:"provider"`
 	Model       string  `json:"model"`
 	APIKey      string  `json:"api_key"`
+	BaseURL     string  `json:"base_url,omitempty"` // Custom base URL for OpenAI-compatible APIs
 	Temperature float32 `json:"temperature"`
 }
-
-
 
 // LoadConfig loads configuration from a JSON file
 func LoadConfig(filename string) (*AgentWorkflowConfig, error) {
@@ -64,8 +63,20 @@ func LoadConfigFromEnv() *AgentWorkflowConfig {
 	applyDefaults(config)
 
 	// Override with environment variables if present
-	if apiKey := os.Getenv("GOOGLE_API_KEY"); apiKey != "" {
+	// Check for OpenAI API key first, then Gemini
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		config.LLM.APIKey = apiKey
+		config.LLM.Provider = "openai"
+		config.LLM.Model = "gpt-4o"
+
+		// Set custom base URL if provided
+		if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+			config.LLM.BaseURL = baseURL
+		}
+	} else if apiKey := os.Getenv("GOOGLE_API_KEY"); apiKey != "" {
+		config.LLM.APIKey = apiKey
+		config.LLM.Provider = "gemini"
+		config.LLM.Model = "gemini-2.0-flash"
 	}
 
 	return config
@@ -96,14 +107,21 @@ func applyDefaults(config *AgentWorkflowConfig) {
 		config.LLM = &LLMConfig{}
 	}
 	if config.LLM.Provider == "" {
-		config.LLM.Provider = "gemini"
+		config.LLM.Provider = "openai" // Default to OpenAI
 	}
 	if config.LLM.Model == "" {
-		config.LLM.Model = "gemini-2.0-flash"
+		// Set default model based on provider
+		switch config.LLM.Provider {
+		case "openai":
+			config.LLM.Model = "gpt-4o"
+		case "gemini":
+			config.LLM.Model = "gemini-2.0-flash"
+		default:
+			config.LLM.Model = "gpt-4o" // Default fallback
+		}
 	}
 	if config.LLM.Temperature == 0 {
 		config.LLM.Temperature = 0.7
 	}
 
-	
 }

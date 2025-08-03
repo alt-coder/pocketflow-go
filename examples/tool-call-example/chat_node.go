@@ -64,177 +64,316 @@ You must respond with structured YAML in the exact format specified below. Do no
 	}
 
 	return &ChatNode[T]{
-		llmProvider: llmProvider,
-		config:      config,
+		llmProvider:        llmProvider,
+		config:             config,
+		AlwaysAllowedTools: make(map[string]struct{}), // Initialize here to prevent nil map
 	}
 }
 
 // Prep prepares the messages and context for LLM planning
 func (n *ChatNode[T]) Prep(state *T) []ChatContext {
 	messages := (*state).GetConversation(n.key)
-	message := llm.Message{
-		Role: llm.RoleUser,
-	}
-	if len(*messages) < 1 {
-		message.Content = n.buildSystemPromptWithTools( "") + "\n\n"
-		n.isUserInputRequired = true
-		fmt.Println("How may I help you today? \n ")
-	}
-	if n.isUserInputRequired {
-		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Print("You: ")
-		var input string
-		
-		if scanner.Scan() {
-			input = strings.TrimSpace(scanner.Text())
-		}
 
-		if scanner.Err() != nil {
-			fmt.Printf("Error reading input: %v\n", scanner.Err())
+	// Handle first interaction or when user input is required
+	if len(*messages) == 0 || n.isUserInputRequired {
+		userInput := n.getUserInput(messages)
+		if userInput != "" {
+			message := llm.Message{
+				Role:    llm.RoleUser,
+				Content: userInput,
+			}
+			(*state).AddMessage(message)
+			n.isUserInputRequired = false
+		} else {
+			// Return empty context if no input provided
+			return []ChatContext{}
 		}
-		message.Content = message.Content + fmt.Sprintf("\n##User: %s\n", input)
-		(*state).AddMessage(message)
-		n.isUserInputRequired = false
 	}
 
-	// Build system prompt with available tools information
+	// Refresh messages after potential addition
+	messages = (*state).GetConversation(n.key)
 
 	context := ChatContext{
-		Messages: (*state).GetConversation(n.key),
+		Messages: messages,
 	}
 
 	return []ChatContext{context}
 }
 
+// getUserInput handles user input collection with proper validation
+func (n *ChatNode[T]) getUserInput(messages *[]llm.Message) string {
+	// Show welcome message only on first interaction
+	if len(*messages) == 0 {
+		fmt.Println("How may I help you today?")
+	}
+
+	fmt.Print("You: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	var lines []string
+	lastLineEmpty := false
+
+	for {
+		if !scanner.Scan() {
+			// Handle EOF or error
+			if err := scanner.Err(); err != nil {
+				log.Printf("Error reading input: %v", err)
+			}
+			break
+		}
+
+		line := scanner.Text()
+
+		// Two consecutive blank lines = end
+		if line == "" && lastLineEmpty {
+			break
+		}
+
+		lastLineEmpty = (line == "")
+		lines = append(lines, line)
+	}
+
+	// Remove trailing empty lines
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // Exec calls planning LLM with the prepared messages
 func (n *ChatNode[T]) Exec(chatcontext ChatContext) (llm.Message, error) {
-	// Try to call the real LLM provider with prepared messages
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Validate context
+	if chatcontext.Messages == nil || len(*chatcontext.Messages) == 0 {
+		return llm.Message{}, fmt.Errorf("no messages to process")
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Call LLM provider with messages prepared in Prep
-	response, err := n.llmProvider.CallLLM(ctx, *chatcontext.Messages)
+	// Prepare messages with system prompt
+	messages := n.prepareMessagesWithSystemPrompt(*chatcontext.Messages)
 
-	return response, err
+	// Call LLM provider
+	response, err := n.llmProvider.CallLLM(ctx, messages)
+	if err != nil {
+		return llm.Message{}, fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	return response, nil
+}
+
+// prepareMessagesWithSystemPrompt adds system prompt to messages if needed
+func (n *ChatNode[T]) prepareMessagesWithSystemPrompt(messages []llm.Message) []llm.Message {
+	// Check if first message is system message
+	if len(messages) > 0 && messages[0].Role == llm.RoleSystem {
+		return messages
+	}
+
+	// Prepend system message
+	systemPrompt := n.buildSystemPromptWithTools("")
+	systemMessage := llm.Message{
+		Role:    llm.RoleSystem,
+		Content: systemPrompt,
+	}
+
+	return append([]llm.Message{systemMessage}, messages...)
 }
 
 // Post processes LLM response, creates assistant message, and determines next action
 func (n *ChatNode[T]) Post(state *T, prepResults []ChatContext, execResults ...llm.Message) core.Action {
 	if len(execResults) == 0 {
+		log.Println("No execution results received")
 		return core.Action(ActionFailure)
 	}
 
 	execResult := execResults[0]
-	if strings.HasPrefix(execResult.Content, "I apologize") {
-		log.Printf("LLM returned apology, treating as failure: %s", execResult.Content)
+
+	// Check for maximum retry limit
+	if n.errorRetryCount >= 3 {
+		log.Printf("Maximum retry limit reached. Last response: %s", execResult.Content)
+		n.errorRetryCount = 0 // Reset for next interaction
 		return core.Action(ActionFailure)
 	}
 
 	// Parse the YAML response
 	result, err := n.parseYAMLResponse(execResult.Content)
-
-	if err != nil && n.errorRetryCount < 3 {
+	if err != nil {
 		n.errorRetryCount++
 		log.Printf("Error parsing response: %v, retrying (%d/3)", err, n.errorRetryCount)
+
+		// Add the failed response and error message to conversation
+		(*state).AddMessage(llm.Message{
+			Role:    llm.RoleAssistant,
+			Content: execResult.Content,
+		})
 		(*state).AddMessage(llm.Message{
 			Role:    llm.RoleUser,
-			Content: fmt.Sprintf("I apologize, but I encountered an error processing your response: %v.\n Please try again.", err),
+			Content: fmt.Sprintf("I apologize, but I encountered an error processing your response: %v. Please try again with the correct YAML format.", err),
 		})
 		return core.ActionRetry
-	} else if err != nil {
-		log.Printf("Failed to parse response after retries: %v", err)
+	}
+
+	// Validate response content
+	if result.Response == "" && len(result.LLMToolCalls) == 0 {
+		log.Println("Empty response and no tool calls")
 		return core.Action(ActionFailure)
 	}
 
-	if result.Response == "" && len(result.LLMToolCalls) == 0 {
-		return core.Action(ActionFailure)
-	}
+	// Set tool calls on the message
 	execResult.ToolCalls = result.LLMToolCalls
 
 	// Add the assistant message to state
 	(*state).AddMessage(execResult)
-	// reset error retry count 
-	n.errorRetryCount = 0
-	// Display the response to user
-	fmt.Printf("\nAssistant: %s\n", result.Response)
 
-	// If there are tool calls that require approval
+	// Reset error retry count on success
+	n.errorRetryCount = 0
+
+	// Display the response to user
+	if result.Response != "" {
+		fmt.Printf("\nAssistant: %s\n", result.Response)
+	}
+
+	// Handle tool calls if present
 	if len(execResult.ToolCalls) > 0 {
-		tools := execResult.ToolCalls
-		results := []llm.ToolResults{}
-		var action core.Action
-		if n.toolUse != PermissionAllow {
-			tools, action = n.AskToolPermission(*state, execResult.ToolCalls)
-			switch action {
-			case core.ActionFailure, core.ActionContinue:
-				return action
+		return n.handleToolCalls(state, execResult.ToolCalls)
+	}
+
+	// No tool calls, require user input for next interaction
+	n.isUserInputRequired = true
+	return core.ActionSuccess
+}
+
+// handleToolCalls processes tool calls with permission checking and execution
+func (n *ChatNode[T]) handleToolCalls(state *T, toolCalls []llm.ToolCalls) core.Action {
+	approvedTools := toolCalls
+	var action core.Action = core.ActionSuccess
+
+	// Check permissions if not set to always allow
+	if n.toolUse != PermissionAllow {
+		approvedTools, action = n.AskToolPermission(*state, toolCalls)
+		if action == core.ActionFailure || action == core.ActionContinue {
+			return action
+		}
+	}
+
+	// Execute approved tools
+	results := make([]llm.ToolResults, 0, len(approvedTools))
+	responseContent := ""
+
+	for _, tool := range approvedTools {
+		result, err := n.toolManager.ExecuteTool(context.Background(), tool)
+		if err != nil {
+			log.Printf("Error executing tool %s: %v", tool.ToolName, err)
+			result = llm.ToolResults{
+				Id:      tool.Id,
+				Content: result.Content,
+				IsError: true,
+				Error:   fmt.Sprintf("Tool execution failed: %v", err),
 			}
 		}
-		for _, tool := range tools {
-			// Check if the tool is allowed
-			result, _ := n.toolManager.ExecuteTool(context.Background(), tool)
-			results = append(results, result)
-		}
+		results = append(results, result)
 
+		// Build response content
+		responseContent += fmt.Sprintf("## Tool %s result:\n%s\n", tool.ToolName, result.Content)
+		if result.IsError {
+			responseContent += fmt.Sprintf("Error: %s\n", result.Error)
+		}
+	}
+
+	// Create tool results message
+	if len(results) > 0 {
 		responseMessage := llm.Message{
 			Role:        llm.RoleUser,
-			ToolCalls:   tools,
+			Content:     responseContent,
+			ToolCalls:   approvedTools,
 			ToolResults: results,
 		}
 
-		for i, results := range results {
-			responseMessage.Content += fmt.Sprintf("## Tool %s result:\n %s\n", tools[i].ToolName, results.Content)
-			if len(results.Media) > 0 {
-				responseMessage.Media = results.Media
-				responseMessage.MimeType = results.MetaData.ContentType
+		// Handle media from tool results
+		for _, result := range results {
+			if len(result.Media) > 0 {
+				responseMessage.Media = result.Media
+				responseMessage.MimeType = result.MetaData.ContentType
+				break // Only handle first media result
 			}
 		}
-		(*state).AddMessage(responseMessage)
 
-	} else {
-		n.isUserInputRequired = true
+		(*state).AddMessage(responseMessage)
 	}
 
 	return core.ActionSuccess
-
 }
 
-// No tool calls, just continue to next user input
-
+// AskToolPermission handles tool permission requests with improved input validation
 func (n *ChatNode[T]) AskToolPermission(state T, availableTools []llm.ToolCalls) ([]llm.ToolCalls, core.Action) {
-	results := []llm.ToolCalls{}
+	if len(availableTools) == 0 {
+		return []llm.ToolCalls{}, core.ActionSuccess
+	}
+
+	results := make([]llm.ToolCalls, 0, len(availableTools))
+	scanner := bufio.NewScanner(os.Stdin)
+
 	for _, tool := range availableTools {
+		// Skip if already always allowed
 		if _, ok := n.AlwaysAllowedTools[tool.ToolName]; ok {
 			results = append(results, tool)
 			continue
 		}
-		fmt.Printf("Tool %s requires permission: \n", tool.ToolName)
-		fmt.Printf("Allow? [y = yes ; n = no ; a = allways allow]: ")
-		var response string
-		fmt.Scanln(&response)
-		if response == "y" {
-			results = append(results, tool)
-		} else if response == "a" {
-			n.AlwaysAllowedTools[tool.ToolName] = struct{}{}
-			results = append(results, tool)
-		} else if response == "n" {
-			continue
-		} else {
-			message := llm.Message{
-				Role:    llm.RoleUser,
-				Content: response,
+
+		fmt.Printf("\nTool '%s' requires permission.\n", tool.ToolName)
+		fmt.Printf("Arguments: %v\n", tool.ToolArgs)
+
+		for {
+			fmt.Print("Allow? [y=yes, n=no, a=always allow]: ")
+
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					log.Printf("Error reading input: %v", err)
+				}
+				return []llm.ToolCalls{}, core.ActionFailure
 			}
-			state.AddMessage(message)
-			return []llm.ToolCalls{}, ActionContinue
+
+			response := strings.TrimSpace(strings.ToLower(scanner.Text()))
+
+			switch response {
+			case "y", "yes":
+				results = append(results, tool)
+				goto nextTool
+			case "n", "no":
+				goto nextTool
+			case "a", "always":
+				n.AlwaysAllowedTools[tool.ToolName] = struct{}{}
+				results = append(results, tool)
+				goto nextTool
+			case "":
+				fmt.Println("Please enter a valid response (y/n/a)")
+				continue
+			default:
+				// Treat other input as user message
+				message := llm.Message{
+					Role:    llm.RoleUser,
+					Content: response,
+				}
+				state.AddMessage(message)
+				return []llm.ToolCalls{}, core.Action(ActionContinue)
+			}
 		}
+	nextTool:
 	}
+
 	return results, core.ActionSuccess
 }
 
 // ExecFallback provides a safe error response
 func (n *ChatNode[T]) ExecFallback(err error) llm.Message {
 	return llm.Message{
-		Content: fmt.Sprintf("I apologize, but I'm having trouble processing your request right now Err %v. Could you please try again?", err),
+		Role:    llm.RoleAssistant,
+		Content: fmt.Sprintf("I apologize, but I'm having trouble processing your request right now. Error: %v. Could you please try again?", err),
 	}
 }
 
@@ -245,19 +384,18 @@ func (n *ChatNode[T]) buildSystemPromptWithTools(summarizedHistory string) strin
 	if n.toolManager != nil {
 		availableTools = n.toolManager.GetAvailableTools()
 	}
+
 	// Start with base system prompt
 	promptBuilder.WriteString(n.config.SystemPrompt)
-	// promptBuilder.WriteString("\n\n")
+	promptBuilder.WriteString("\n\n")
 
 	if summarizedHistory != "" {
 		promptBuilder.WriteString("## Previous Conversation Summary:\n")
 		promptBuilder.WriteString(summarizedHistory)
 		promptBuilder.WriteString("\n\n")
 	}
+
 	if len(availableTools) > 0 {
-		promptBuilder.WriteString("You can use the following tools to assist the user")
-		promptBuilder.WriteString("\n\n")
-		promptBuilder.WriteString("")
 		promptBuilder.WriteString("## Available Tools:\n")
 		for _, tool := range availableTools {
 			promptBuilder.WriteString(fmt.Sprintf("\n- **%s**: %s\n", tool.Name, tool.Description))
@@ -283,11 +421,11 @@ func (n *ChatNode[T]) buildSystemPromptWithTools(summarizedHistory string) strin
 	promptBuilder.WriteString("    arg2: \"value2\"\n")
 	promptBuilder.WriteString("  - arg1: \"value3\"\n")
 	promptBuilder.WriteString("```\n\n")
-	promptBuilder.WriteString("If no tools are needed or no tool arguments are required, use empty arrays:\n")
-	promptBuilder.WriteString("tool_calls: {}\n")
-	promptBuilder.WriteString("tool_args: {}\n\n ")
-	promptBuilder.WriteString("Please Dont use multiple tool calls if they there is a dependence between them(that is they need to excecuted sequencially not concurrently), instead use a single tool call with all required arguments.\n")
-	promptBuilder.WriteString("Analyze the following request and respond with the structured YAML format That must be parseable.")
+	promptBuilder.WriteString("If no tools are needed, use empty arrays:\n")
+	promptBuilder.WriteString("tool_calls: []\n")
+	promptBuilder.WriteString("tool_args: []\n\n")
+	promptBuilder.WriteString("IMPORTANT: Use sequential tool calls only when there's a dependency between them. For independent operations, use a single tool call with all required arguments.\n")
+	promptBuilder.WriteString("Analyze the following request and respond with the structured YAML format that must be parseable.\n")
 
 	return promptBuilder.String()
 }
@@ -321,25 +459,33 @@ func (n *ChatNode[T]) formatToolParameters(builder *strings.Builder, params map[
 	}
 }
 
-// parseYAMLResponse parses the strict YAML response from LLM
+// parseYAMLResponse parses the strict YAML response from LLM with better error handling
 func (n *ChatNode[T]) parseYAMLResponse(responseContent string) (PlanningResult, error) {
-
 	parsedResp, err := structured.ParseResponse[PlanningResponse](responseContent)
 	if err != nil {
 		return PlanningResult{}, fmt.Errorf("failed to parse YAML response: %w", err)
 	}
-	planningResp := parsedResp.Data
 
-	llmToolCalls := make([]llm.ToolCalls, 0)
+	planningResp := parsedResp.Data
+	if planningResp == nil {
+		return PlanningResult{}, fmt.Errorf("parsed response data is nil")
+	}
+
+	// Validate response structure
+	if err := planningResp.Validate(); err != nil {
+		return PlanningResult{}, fmt.Errorf("response validation failed: %w", err)
+	}
+
+	llmToolCalls := make([]llm.ToolCalls, 0, len(planningResp.ToolCalls))
 
 	for i, toolName := range planningResp.ToolCalls {
 		if i >= len(planningResp.ToolArgs) {
-			break // Safety check
+			log.Printf("Warning: tool_calls and tool_args length mismatch at index %d", i)
+			break
 		}
 
 		callID := fmt.Sprintf("call_%d_%d", time.Now().Unix(), i+1)
 
-		// LLM format
 		llmToolCall := llm.ToolCalls{
 			Id:       callID,
 			ToolName: toolName,

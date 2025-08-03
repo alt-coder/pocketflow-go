@@ -1,49 +1,300 @@
-# PocketFlow-Go: Tool-Call Example
+# Tool Call Example with OpenAI
 
-This example demonstrates how to build an interactive AI agent using the PocketFlow-Go framework. The agent engages in a conversation with the user and can decide to use external tools to fulfill requests. A key feature of this example is the user-centric permission model, where the agent explicitly asks for approval before executing any tool.
+This example demonstrates how to use PocketFlow-Go with OpenAI's LLM provider and MCP (Model Context Protocol) tools.
 
 ## Features
 
-- **Interactive Chat**: A command-line interface for continuous conversation with the agent.
-- **LLM-Powered Tool-Calling**: Leverages a Gemini LLM to intelligently decide when to use tools based on the user's request.
-- **Structured Communication**: The agent and LLM communicate using a strict YAML format, ensuring reliable parsing of intents and tool commands.
-- **User Permission Model**: Before executing a tool, the agent prompts the user for permission:
-  - `y`: Yes, allow this single use.
-  - `n`: No, do not use the tool for this request.
-  - `a`: Always allow, and don't ask for permission for this specific tool again in the current session.
-- **External Tool Management**: Uses the Model-Context-Protocol (MCP) to manage and interact with external tools (e.g., filesystem access, web search).
-- **Flexible Configuration**: Configure the agent, LLM, and tools via a `config.json` file or environment variables.
+- **OpenAI Integration**: Uses the official OpenAI Go client for reliable API communication
+- **Tool Calling**: Supports OpenAI's function calling capabilities
+- **MCP Tools**: Integrates with Model Context Protocol servers for extended functionality
+- **Permission System**: Asks for user approval before executing tools
+- **Rate Limiting**: Built-in rate limiting to respect API limits
+- **Flexible Configuration**: Supports both file-based and environment-based configuration
 
-## How it Works
+## Setup
 
-The application is built around a `Workflow` from the PocketFlow-Go framework. This workflow contains a single, self-looping `ChatNode` that manages the entire agent interaction. The `ChatNode` implements the core `Prep`, `Exec`, and `Post` methods, which define the agent's lifecycle for each turn.
+### 1. Install Dependencies
 
-1.  **Initialization (`main.go`)**: The application starts by loading the configuration, initializing the Google Gemini LLM provider, and setting up the `MCPManager` which manages the lifecycle of external tool servers.
+```bash
+go mod tidy
+```
 
-2.  **Workflow and State**:
-    - A `Workflow` is created containing the central `ChatNode`.
-    - The `AgentState` (`state.go`) is initialized to hold the conversation history.
+### 2. Set Environment Variables
 
-3.  **The `ChatNode` Execution Cycle (`chat_node.go`)**: The workflow runs the `ChatNode` in a loop. Each iteration follows the `Prep -> Exec -> Post` pattern:
+```bash
+export OPENAI_API_KEY="sk-your-openai-api-key-here"
 
-    -   **`Prep` (Prepare)**: This method sets the stage for the LLM call. It
-        - Reads the current conversation history from the `AgentState`.
-        - Prompts the user for new input from the command line.
-        - Constructs a detailed system prompt, dynamically including the schemas of all available tools to let the LLM know what it can do.
-        - Bundles the history and new input into a `ChatContext` object.
+# Optional: Use custom OpenAI-compatible endpoint
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+```
 
-    -   **`Exec` (Execute)**: This is the simplest step. It takes the `ChatContext` from `Prep` and makes the API call to the Gemini LLM. It returns the raw response from the model.
+### 3. Configure MCP Tools (Optional)
 
-    -   **`Post` (Process)**: This method handles the LLM's response and orchestrates the next steps. It
-        - Parses the LLM's YAML-formatted response to extract the user-facing `response` and any requested `tool_calls`.
-        - If tools were requested, it calls `AskToolPermission` to prompt the user for approval (`y/n/a`).
-        - For each approved tool, it uses the `ToolManager` to execute the command via MCP.
-        - It formats the tool results as a new message and adds both the LLM's text response and the tool results to the `AgentState`.
-        - Finally, it returns a `core.Action` (e.g., `ActionSuccess`) to the workflow, which causes the loop to continue to the next `Prep` phase.
+The example includes Google Sheets MCP server configuration. You can modify `config.json` to add other MCP servers:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/workspace"]
+      },
+      "web-search": {
+        "command": "uvx",
+        "args": ["mcp-server-web-search"],
+        "env": {
+          "SEARCH_API_KEY": "${SEARCH_API_KEY}"
+        }
+      }
+    }
+  }
+}
+```
+
+## Running the Example
+
+```bash
+go run .
+```
+
 ## Configuration
 
-Create a `config.json` file in the `examples/tool-call-example` directory.
+### Option 1: Configuration File (config.json)
 
-**1. API Keys:**
-You need a Google AI API key for the Gemini LLM. You can set it in one of two ways:
-- **(Recommended)** In `config.json`:
+```json
+{
+  "agent": {
+    "max_tool_calls": 5,
+    "max_history": 20,
+    "system_prompt": "You are a helpful assistant with access to various tools. Use tools when necessary to help the user accomplish their tasks."
+  },
+  "mcp": {
+    "servers": {
+      "google-sheets": {
+        "command": "uvx",
+        "args": ["mcp-google-sheets@latest"],
+        "env": {
+          "DRIVE_FOLDER_ID": "your-google-drive-folder-id"
+        }
+      }
+    }
+  },
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "api_key": "${OPENAI_API_KEY}",
+    "base_url": "https://api.openai.com/v1",
+    "temperature": 0.2
+  }
+}
+```
+
+### Option 2: Environment Variables
+
+If no `config.json` is found, the application will use environment variables:
+
+```bash
+export OPENAI_API_KEY="sk-your-api-key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # Optional: custom endpoint
+
+# Optional: Use Gemini instead
+export GOOGLE_API_KEY="your-gemini-api-key"
+```
+
+## Supported LLM Providers
+
+### OpenAI (Default)
+- **Models**: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo
+- **Features**: Tool calling, vision (with gpt-4o), streaming
+- **Environment**: `OPENAI_API_KEY`
+
+### Gemini (Alternative)
+- **Models**: gemini-2.0-flash, gemini-2.5-pro
+- **Features**: Tool calling, multimodal
+- **Environment**: `GOOGLE_API_KEY`
+
+## Usage Example
+
+1. **Start the application**:
+   ```bash
+   go run .
+   ```
+
+2. **Interact with the agent**:
+   ```
+   You: Can you help me create a spreadsheet with sales data?
+   
+   Assistant: I'll help you create a spreadsheet with sales data. Let me use the Google Sheets tool to create this for you.
+   
+   Tool 'sheets_create' requires permission.
+   Arguments: map[title:Sales Data Spreadsheet]
+   Allow? [y=yes, n=no, a=always allow]: y
+   
+   ## Tool sheets_create result:
+   Created spreadsheet "Sales Data Spreadsheet" with ID: 1abc...xyz
+   
+   Assistant: I've successfully created a new Google Sheets spreadsheet called "Sales Data Spreadsheet". The spreadsheet is now ready for you to add your sales data...
+   ```
+
+3. **Tool Permission System**:
+   - `y` - Allow this specific tool call
+   - `n` - Deny this tool call
+   - `a` - Always allow this tool (no future prompts)
+
+## Available MCP Tools
+
+The example can be configured with various MCP servers:
+
+### Google Sheets
+```bash
+uvx mcp-google-sheets@latest
+```
+
+### Filesystem
+```bash
+npx -y @modelcontextprotocol/server-filesystem ~/workspace
+```
+
+### Web Search
+```bash
+uvx mcp-server-web-search
+```
+
+### SQLite
+```bash
+uvx mcp-server-sqlite --db-path ./database.db
+```
+
+## Code Structure
+
+- `main.go` - Main application entry point
+- `config.go` - Configuration loading and management
+- `chat_node.go` - Core chat logic with tool calling
+- `state.go` - Conversation state management
+- `types.go` - Type definitions
+
+## Error Handling
+
+The application includes comprehensive error handling:
+
+- **API Errors**: Automatic retries with exponential backoff
+- **Rate Limiting**: Built-in token bucket rate limiting
+- **Tool Failures**: Graceful handling of tool execution errors
+- **Configuration Errors**: Clear error messages for setup issues
+
+## Customization
+
+### Adding Custom Tools
+
+You can add local tools in addition to MCP tools:
+
+```go
+// In main.go
+toolManager.AddLocalTool("custom_tool", "Description", func(input CustomInput) CustomOutput {
+    // Your tool logic here
+    return CustomOutput{Result: "success"}
+})
+```
+
+### Modifying System Prompt
+
+Update the system prompt in `config.json`:
+
+```json
+{
+  "agent": {
+    "system_prompt": "You are a specialized assistant for data analysis tasks..."
+  }
+}
+```
+
+### Changing Models
+
+Switch between different models:
+
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",  // Faster, cheaper option
+    "temperature": 0.1       // More deterministic responses
+  }
+}
+```
+
+### Custom Base URLs
+
+Use OpenAI-compatible APIs or custom endpoints:
+
+#### Azure OpenAI
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "api_key": "${AZURE_OPENAI_API_KEY}",
+    "base_url": "https://your-resource.openai.azure.com/openai/deployments/your-deployment-name",
+    "temperature": 0.7
+  }
+}
+```
+
+#### Local LLM (e.g., Ollama, LM Studio)
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "llama2",
+    "api_key": "not-needed",
+    "base_url": "http://localhost:1234/v1",
+    "temperature": 0.7
+  }
+}
+```
+
+#### Other OpenAI-compatible APIs
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "model": "mixtral-8x7b-32768",
+    "api_key": "${GROQ_API_KEY}",
+    "base_url": "https://api.groq.com/openai/v1",
+    "temperature": 0.7
+  }
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Key Not Set**:
+   ```
+   Error: OPENAI_API_KEY environment variable is required
+   ```
+   Solution: Set your OpenAI API key in environment variables
+
+2. **MCP Server Not Found**:
+   ```
+   Error: Failed to start MCP server
+   ```
+   Solution: Install the MCP server using `uvx` or `npx`
+
+3. **Rate Limiting**:
+   ```
+   Error: Rate limit exceeded
+   ```
+   Solution: The application includes built-in rate limiting, but you may need to adjust the limits in configuration
+
+### Debug Mode
+
+Enable verbose logging by setting:
+```bash
+export DEBUG=true
+```
+
+## Contributing
+
+Feel free to extend this example with additional MCP servers, custom tools, or enhanced features. The modular design makes it easy to add new capabilities.
