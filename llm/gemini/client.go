@@ -35,6 +35,7 @@ func (c *GeminiClient) CallLLM(ctx context.Context, messages []llm.Message) (llm
 			return result, ctx.Err()
 		}
 	}
+	fmt.Println("--------")
 
 	// Convert messages to Gemini format
 	genaiMessages, err := c.convertToGenaiMessages(messages)
@@ -45,6 +46,7 @@ func (c *GeminiClient) CallLLM(ctx context.Context, messages []llm.Message) (llm
 	respone, err := c.genaiClient.Models.GenerateContent(ctx, c.config.Model, genaiMessages, nil)
 
 	if err != nil {
+		fmt.Println("Error calling Gemini LLM:", err)
 		return llm.Message{}, fmt.Errorf("failed to generate content: %w", err)
 	}
 
@@ -82,7 +84,6 @@ func (c *GeminiClient) convertToGenaiMessages(messages []llm.Message) ([]*genai.
 				},
 			})
 		}
-
 
 		genaiMessages = append(genaiMessages, content)
 	}

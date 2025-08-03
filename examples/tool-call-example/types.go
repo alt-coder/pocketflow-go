@@ -64,12 +64,13 @@ type ToolInteraction struct {
 }
 
 // Permission represents tool execution permission
-type Permission struct {
-	ToolName    string    `json:"tool_name"`    // Name of the tool
-	Granted     bool      `json:"granted"`      // Whether permission is granted
-	AlwaysAllow bool      `json:"always_allow"` // Whether to always allow this tool
-	GrantedAt   time.Time `json:"granted_at"`   // When permission was granted
-}
+type Permission string
+
+const  (
+	PermissionAllow Permission = "allow"
+	PermissionDeny  Permission = "deny"
+	PermissionAlwaysAsk Permission = "always_ask"
+)
 
 // PlanningResponse represents the structured YAML response from the planning LLM
 type PlanningResponse struct {
@@ -111,10 +112,9 @@ type SummarizationResult struct {
 	Error   error  `json:"error,omitempty"`
 }
 
-// PlanningContext represents context for planning
-type PlanningContext struct {
-	Messages       []llm.Message `json:"messages"`        // Messages prepared for LLM call
-	AvailableTools []ToolSchema  `json:"available_tools"` // Available tools for reference
+// ChatContext represents context for planning
+type ChatContext struct {
+	Messages       *[]llm.Message `json:"messages"`        // Messages prepared for LLM call
 }
 
 // PlanningResult represents the result of planning

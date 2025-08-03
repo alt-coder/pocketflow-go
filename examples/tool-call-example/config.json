@@ -1,0 +1,26 @@
+{
+  "agent": {
+    "max_tool_calls": 5,
+    "max_history": 20,
+    "system_prompt": "You are a helpful assistant with access to various tools. Use tools when necessary to help the user accomplish their tasks.",
+    "temperature": 0.7
+  },
+  "mcp": {
+    "servers": {
+      "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "DRIVE_FOLDER_ID": ""
+      }
+    }
+    }
+  },
+  "llm": {
+    "provider": "gemini",
+    "model": "gemini-2.5-pro",
+    "api_key": "",
+    "base_url": "http://localhost:1337/v1",
+    "temperature": 0.2
+  }
+}

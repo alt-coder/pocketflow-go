@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/alt-coder/pocketflow-go)](https://goreportcard.com/report/github.com/alt-coder/pocketflow-go)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 
-A Go port of the [PocketFlow](https://github.com/The-Pocket/PocketFlow) framework - a minimalist 100-line LLM framework that captures the core abstraction of LLM frameworks: **Graph**.
+A Go port of the [PocketFlow](https://github.com/The-Pocket/PocketFlow) framework, designed to be a robust and flexible framework for building agentic systems. PocketFLow captures the core abstraction of LLM frameworks: **Graph**.
 
 ## Table of Contents
 
@@ -28,20 +28,19 @@ A Go port of the [PocketFlow](https://github.com/The-Pocket/PocketFlow) framewor
 - [License](#license)
 - [Roadmap](#roadmap)
 
-## Philosophy
+## Philosophy & Key Differences
 
-**Elegant Simplicity in Go's Ecosystem**
+While inspired by the original Python PocketFlow, this Go implementation is a complete reimagining, designed to find a balance between elegant simplicity and the powerful features required for modern agentic frameworks. It builds on Go's strengths to offer a distinct and robust experience.
 
-While the original PocketFlow proved that **"You only need 100 lines for an LLM Framework"** in Python, this Go port embraces a different philosophy: **"Elegant simplicity with Go's strengths"**.
+Key principles that set PocketFlowGo apart:
 
-Go's type system, concurrency model, and explicit error handling naturally lead to more verbose but safer code. This implementation focuses on:
+*   **Simplified Concurrency with Worker Pools:** There is no separate `BatchNode` or complex workflow for parallel execution. By default, every node can process items in a batch, and the framework leverages worker pools powered by goroutines. This allows you to scale out effortlessly and efficiently.
 
-- **Clarity over brevity**: Explicit interfaces and strong typing make the code self-documenting
-- **Concurrency by design**: Built-in goroutine support for parallel node execution
-- **Production readiness**: Comprehensive error handling and testing from day one
-- **Zero vendor lock-in**: No dependencies on specific LLM providers
-- **Composable architecture**: Easy to extend and customize for specific use cases
+*   **Extensibility by Design:** We prioritize developer flexibility. You can easily integrate any LLM by implementing the `LLMProvider` interface, freeing you from vendor lock-in and allowing you to use your own custom solutions.
 
+*   **Unified Tool Management:** A core feature is the built-in `ToolManager`, which standardizes and simplifies tool calls. It's designed to be used universally, whether your tools are native Go functions or exposed through an MCP-based server.
+
+*   **Balancing Simplicity and Power:** PocketFlowGo aims to be a lean, intuitive framework that doesn't sacrifice the essential features needed for building sophisticated agentic systems. We provide the core building blocks, giving you the power to create without unnecessary complexity.
 ## Why PocketFlow?
 
 **Focus on Core Abstractions, Not Framework Bloat**
