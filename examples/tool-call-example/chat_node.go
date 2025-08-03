@@ -460,26 +460,21 @@ func (n *ChatNode[T]) formatToolParameters(builder *strings.Builder, params map[
 }
 
 // parseYAMLResponse parses the strict YAML response from LLM with better error handling
-func (n *ChatNode[T]) parseYAMLResponse(responseContent string) (PlanningResult, error) {
-	parsedResp, err := structured.ParseResponse[PlanningResponse](responseContent)
+func (n *ChatNode[T]) parseYAMLResponse(responseContent string) (ParsedResult, error) {
+	parsedResp, err := structured.ParseResponse[LLMResponse](responseContent)
 	if err != nil {
-		return PlanningResult{}, fmt.Errorf("failed to parse YAML response: %w", err)
+		return ParsedResult{}, fmt.Errorf("failed to parse YAML response: %w", err)
 	}
 
-	planningResp := parsedResp.Data
-	if planningResp == nil {
-		return PlanningResult{}, fmt.Errorf("parsed response data is nil")
+	response := parsedResp.Data
+	if response == nil {
+		return ParsedResult{}, fmt.Errorf("parsed response data is nil")
 	}
 
-	// Validate response structure
-	if err := planningResp.Validate(); err != nil {
-		return PlanningResult{}, fmt.Errorf("response validation failed: %w", err)
-	}
+	llmToolCalls := make([]llm.ToolCalls, 0, len(response.ToolCalls))
 
-	llmToolCalls := make([]llm.ToolCalls, 0, len(planningResp.ToolCalls))
-
-	for i, toolName := range planningResp.ToolCalls {
-		if i >= len(planningResp.ToolArgs) {
+	for i, toolName := range response.ToolCalls {
+		if i >= len(response.ToolArgs) {
 			log.Printf("Warning: tool_calls and tool_args length mismatch at index %d", i)
 			break
 		}
@@ -489,13 +484,13 @@ func (n *ChatNode[T]) parseYAMLResponse(responseContent string) (PlanningResult,
 		llmToolCall := llm.ToolCalls{
 			Id:       callID,
 			ToolName: toolName,
-			ToolArgs: planningResp.ToolArgs[i],
+			ToolArgs: response.ToolArgs[i],
 		}
 		llmToolCalls = append(llmToolCalls, llmToolCall)
 	}
 
-	return PlanningResult{
-		Response:     planningResp.Response,
+	return ParsedResult{
+		Response:     response.Response,
 		LLMToolCalls: llmToolCalls,
 	}, nil
 }

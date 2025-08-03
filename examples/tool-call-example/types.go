@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ThinkInAIXYZ/go-mcp/protocol"
@@ -66,26 +65,18 @@ type ToolInteraction struct {
 // Permission represents tool execution permission
 type Permission string
 
-const  (
-	PermissionAllow Permission = "allow"
-	PermissionDeny  Permission = "deny"
+const (
+	PermissionAllow     Permission = "allow"
+	PermissionDeny      Permission = "deny"
 	PermissionAlwaysAsk Permission = "always_ask"
 )
 
-// PlanningResponse represents the structured YAML response from the planning LLM
-type PlanningResponse struct {
+// LLMResponse represents the structured YAML response from the planning LLM
+type LLMResponse struct {
 	Intent    string                   `yaml:"intent"`
 	Response  string                   `yaml:"response"`
 	ToolCalls []string                 `yaml:"tool_calls"`
 	ToolArgs  []map[string]interface{} `yaml:"tool_args"`
-}
-
-// Validate ensures the YAML response is properly structured
-func (pr *PlanningResponse) Validate() error {
-	if len(pr.ToolCalls) != len(pr.ToolArgs) {
-		return fmt.Errorf("tool_calls and tool_args must have the same length")
-	}
-	return nil
 }
 
 // UserInput represents user input data
@@ -93,63 +84,14 @@ type UserInput struct {
 	Text string `json:"text"`
 }
 
-// UserInputResult represents the result of processing user input
-type UserInputResult struct {
-	ProcessedInput string `json:"processed_input"`
-	ShouldExit     bool   `json:"should_exit"`
-	NeedsSummary   bool   `json:"needs_summary"`
-}
-
-// SummarizationContext represents context for summarization
-type SummarizationContext struct {
-	Messages               []llm.Message     `json:"messages"`
-	RecentToolInteractions []ToolInteraction `json:"recent_tool_interactions"`
-}
-
-// SummarizationResult represents the result of summarization
-type SummarizationResult struct {
-	Summary string `json:"summary"`
-	Error   error  `json:"error,omitempty"`
-}
-
-// ChatContext represents context for planning
-type ChatContext struct {
-	Messages       *[]llm.Message `json:"messages"`        // Messages prepared for LLM call
-}
-
-// PlanningResult represents the result of planning
-type PlanningResult struct {
+// ParsedResult represents the result of planning
+type ParsedResult struct {
 	Response     string          `json:"response"`
 	LLMToolCalls []llm.ToolCalls `json:"llm_tool_calls"` // LLM format for message
 	Error        error           `json:"error,omitempty"`
 }
 
-// ApprovalInput represents input for approval processing
-type ApprovalInput struct {
-	UserInput    string        `json:"user_input"`
-	PendingTools llm.ToolCalls `json:"pending_tools"` // Index of this input in the pending tools
-}
-
-// ApprovalResult represents the result of approval processing
-type ApprovalResult struct {
-	Action       string `json:"action"`        // "approve", "reject", "append"
-	AlwaysAllow  bool   `json:"always_allow"`  // Whether to always allow these tools
-	AppendedText string `json:"appended_text"` // Additional text if action is "append"
-}
-
-// CleanupItem represents an item to be cleaned up
-type CleanupItem struct {
-	MessageIndex  int             `json:"message_index"`   // Index in Messages array
-	ToolCall      ToolCall        `json:"tool_call"`       // The tool call to evaluate
-	ToolResult    llm.ToolResults `json:"tool_result"`     // The tool result to evaluate
-	IsCurrentTurn bool            `json:"is_current_turn"` // Whether this is from current turn
-	Message       string          `json:"message"`         // Message to replace tool result with
-	PrevMessage   string          `json:"prev_message"`    // Previous message before cleanup
-}
-
-// CleanupResult represents the result of cleanup evaluation
-type CleanupResult struct {
-	ShouldClean bool   `json:"should_clean"` // Whether to clean this tool interaction
-	IsSuccess   bool   `json:"is_success"`   // Whether the tool execution was successful
-	ErrorReason string `json:"error_reason"` // Reason if it's an error (for preservation)
+// ChatContext represents context for planning
+type ChatContext struct {
+	Messages *[]llm.Message `json:"messages"` // Messages prepared for LLM call
 }
